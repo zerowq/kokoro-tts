@@ -237,19 +237,15 @@
             <div class="input-group">
                 <label>选择音色 / Voice</label>
                 <select id="voiceSelect">
-                    <optgroup label="Kokoro-82M (English)">
+                    <optgroup label="English 英文 (Kokoro)">
                         <option value="af_sarah">Sarah (Female)</option>
-                        <option value="af_bella">Bella (Female)</option>
-                        <option value="am_adam">Adam (Male)</option>
                         <option value="am_michael">Michael (Male)</option>
-                        <option value="bf_isabella">Isabella (British)</option>
                     </optgroup>
-                    <optgroup label="Meta MMS (Malay/Multi)">
-                        <option value="mms_ms">Malay (马来文)</option>
-                        <option value="mms_zh">Chinese (中文)</option>
-                        <option value="mms_en">English (MMS)</option>
+                    <optgroup label="Malay 马来文 (MMS)">
+                        <option value="mms_ms">Malay (马来文模型)</option>
                     </optgroup>
                 </select>
+
             </div>
             <div class="input-group">
                 <label>播放语速 / Speed</label>
@@ -344,14 +340,15 @@
             }
         };
 
-        // 语言切换提示
+        // 语言切换示例
         voiceSelect.onchange = () => {
             if (voiceSelect.value === 'mms_ms') {
                 textInput.value = "Halo, selamat datang ke Kokoro TTS. Ini adalah sistem sintesis pertuturan yang sangat pantas.";
-            } else if (voiceSelect.value === 'mms_zh') {
-                textInput.value = "您好，欢迎使用 Kokoro 语音合成系统。这是一个运行在 GPU 上的极速引擎。";
+            } else {
+                textInput.value = "Hello, welcome to Kokoro TTS. This is a very lightweight and fast speech synthesis model.";
             }
         };
+
     </script>
 </body>
 

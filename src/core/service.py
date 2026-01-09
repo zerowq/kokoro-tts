@@ -148,11 +148,26 @@ class TTSService:
                          lang: str = "en-us", speed: float = 1.0) -> Generator[bytes, None, None]:
         """流式合成语音"""
         try:
-            for chunk in self.kokoro.synthesize_stream(text, voice, lang, speed):
-                yield chunk
+            # 自动选择引擎
+            engine = self.auto_select_engine(lang)
+            
+            if engine == 'mms':
+                # MMS 目前不支持流式分片，直接返回完整音频流
+                lang_code = lang.split('-')[0] if '-' in lang else lang
+                # 使用临时文件过渡
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmp:
+                    self.mms.synthesize(text, language=lang_code, output_path=tmp.name)
+                    with open(tmp.name, "rb") as f:
+                        yield f.read()
+            else:
+                # Kokoro 流式合成
+                for chunk in self.kokoro.synthesize_stream(text, voice, lang, speed):
+                    yield chunk
         except Exception as e:
             logger.error(f"❌ Stream synthesis failed: {e}")
             raise
+
     
     def get_health(self) -> Dict:
         """获取服务健康状态"""

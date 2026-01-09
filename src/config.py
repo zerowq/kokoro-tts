@@ -10,7 +10,7 @@ class Config:
     # 模型路径
     MODEL_DIR = ROOT_DIR / "models"
     KOKORO_MODEL = MODEL_DIR / "kokoro" / "kokoro-v1.0.onnx"
-    KOKORO_VOICES = MODEL_DIR / "kokoro" / "voices.json"
+    KOKORO_VOICES = MODEL_DIR / "kokoro" / "voices-v1.0.bin"
     
     # 输出目录
     OUTPUT_DIR = ROOT_DIR / "output"

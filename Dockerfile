@@ -29,7 +29,7 @@ WORKDIR /app
 # 拷贝依赖定义
 COPY pyproject.toml .
 
-# 安装核心依赖 (锁定 onnxruntime-gpu 版本以确保兼容性)
+# 安装核心依赖 (锁定版本以确保兼容性)
 RUN uv pip install --system \
     onnxruntime-gpu==1.17.1 \
     kokoro-onnx \
@@ -40,7 +40,8 @@ RUN uv pip install --system \
     uvicorn \
     loguru \
     soundfile \
-    numpy<2.0.0
+    "numpy<2.0.0"
+
 
 # 拷贝代码
 COPY . .

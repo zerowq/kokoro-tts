@@ -6,9 +6,11 @@ import uuid
 import os
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
+
 
 from src.config import config
 from src.core.service import get_service
@@ -29,9 +31,22 @@ class TTSResponse(BaseModel):
     success: bool
     audio_url: str
 
+# 挂载静态文件
+static_path = ROOT_DIR / "static"
+output_path = config.OUTPUT_DIR
+
+if static_path.exists():
+    app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
+if output_path.exists():
+    app.mount("/output", StaticFiles(directory=str(output_path)), name="output")
+
 @app.get("/")
 async def root():
+    index_file = static_path / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
     return {"service": "Kokoro TTS", "status": "running"}
+
 
 @app.get("/api/health")
 async def health():

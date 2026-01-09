@@ -1,4 +1,4 @@
-.PHONY: help install install-mms sync download download-mms test benchmark run clean
+.PHONY: help install install-mms sync download download-all download-check download-mms download-mms-all test benchmark benchmark-cpu benchmark-both run clean
 
 help:
 	@echo "🎤 Kokoro TTS - UV 项目管理"
@@ -7,7 +7,9 @@ help:
 	@echo "  make install       - 安装依赖 (仅 Kokoro)"
 	@echo "  make install-mms   - 安装 MMS 多语言支持 (torch, transformers)"
 	@echo "  make download      - 下载 Kokoro 模型"
-	@echo "  make download-mms  - 下载 MMS 马来文模型"
+	@echo "  make download-all  - 下载 Kokoro + MMS (推荐)"
+	@echo "  make download-check- 检查已有模型"
+	@echo "  make download-mms  - 下载 MMS 马来文"
 	@echo ""
 	@echo "【测试和性能】"
 	@echo "  make test          - 运行快速测试"
@@ -31,13 +33,21 @@ download:
 	@echo "📥 Downloading Kokoro models..."
 	uv run python scripts/download_models.py
 
+download-all:
+	@echo "📥 Downloading Kokoro + MMS (Malay)..."
+	uv run python scripts/download_all_models.py
+
+download-check:
+	@echo "📂 Checking existing models..."
+	uv run python scripts/download_all_models.py --check
+
 download-mms:
 	@echo "📥 Downloading MMS models (Malay)..."
 	uv run python scripts/download_mms_models.py --lang ms
 
 download-mms-all:
 	@echo "📥 Downloading all MMS models..."
-	uv run python scripts/download_mms_models.py --all
+	uv run python scripts/download_all_models.py --mms-all
 
 test:
 	@echo "🧪 Running quick test..."

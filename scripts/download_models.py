@@ -141,6 +141,42 @@ def main():
             logger.error(f"   {filename}: {url}")
         return False
     
+    # 解压 voices-v1.0.bin 和生成 voices.json
+    try:
+        import zipfile
+        import json
+        
+        model_dir = ROOT_DIR / "models" / "kokoro"
+        voices_bin = model_dir / "voices-v1.0.bin"
+        
+        if voices_bin.exists() and not (model_dir / "voices.json").exists():
+            logger.info("")
+            logger.info("📦 解压 voices-v1.0.bin...")
+            with zipfile.ZipFile(voices_bin, 'r') as zip_ref:
+                zip_ref.extractall(model_dir)
+            logger.info("✅ 解压完成")
+            
+            # 生成 voices.json (包含 numpy 数据)
+            logger.info("📝 生成 voices.json...")
+            import numpy as np
+            
+            voices_dict = {}
+            for npy_file in sorted(model_dir.glob('*.npy')):
+                voice_name = npy_file.stem
+                try:
+                    data = np.load(npy_file)
+                    voices_dict[voice_name] = data.tolist()
+                except Exception as e:
+                    logger.warning(f"⚠️  读取 {voice_name} 失败: {e}")
+            
+            with open(model_dir / "voices.json", 'w') as f:
+                json.dump(voices_dict, f)
+            
+            logger.info(f"✅ 生成 voices.json ({len(voices_dict)} 个音色)")
+    except Exception as e:
+        logger.error(f"⚠️  解压或生成 voices.json 失败: {e}")
+        logger.info("💡 手动解压: unzip models/kokoro/voices-v1.0.bin -d models/kokoro/")
+    
     # 验证下载的文件
     if verify_models():
         logger.info("")

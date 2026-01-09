@@ -80,7 +80,11 @@ uv run python scripts/download_mms_models.py --list
 **手动下载 Kokoro**:
 从 [GitHub releases](https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0) 下载到 `models/kokoro/`:
 - `kokoro-v1.0.onnx` (310 MB)
-- `voices-v1.0.bin` (1.5 MB)
+- `voices-v1.0.bin` (27 MB - ZIP 文件，包含 54 个 .npy 音色文件)
+
+下载后脚本会自动：
+- 解压 `voices-v1.0.bin` (ZIP 文件，包含 54 个 .npy 文件)
+- 生成 `voices.json` (将所有 .npy 文件转换为 JSON 格式，供 kokoro-onnx 使用)
 
 ## 使用
 
@@ -200,12 +204,24 @@ curl http://localhost:8879/api/health
 
 ## 支持的语言和音色
 
-### Kokoro-82M 音色 (英文)
-- `af_sarah` - 女性美式英语
-- `am_adam` - 男性美式英语
-- `bf_emma` - 女性英式英语
-- `bm_george` - 男性英式英语
-- 更多见 [kokoro-onnx 文档](https://github.com/thewh1teagle/kokoro-onnx)
+### Kokoro-82M 音色 (54 个，多国口音)
+**女性美式英语 (af_):**
+af_alloy, af_aoede, af_bella, af_heart, af_jessica, af_kore, af_nicole, af_nova, af_river, af_sarah, af_sky
+
+**男性美式英语 (am_):**
+am_adam, am_echo, am_eric, am_fenrir, am_liam, am_michael, am_onyx, am_puck, am_santa
+
+**女性英式英语 (bf_):**
+bf_alice, bf_emma, bf_isabella
+
+**男性英式英语 (bm_):**
+bm_daniel, bm_fable, bm_george, bm_winston
+
+**其他语言音色:**
+- 中文 (zf_, zm_): zf_xiaobei, zf_xiaoni, zf_xiaoxiao, zf_xiaoyi, zm_yunjian, zm_yunxi 等
+- 日文 (jf_, jm_), 韩文 (kf_, km_) 等 10+ 语言
+
+查看完整列表: `models/kokoro/voices.json`
 
 ### Meta MMS-TTS 语言 (10+ 语言)
 | 代码 | 语言 | 代码 | 语言 |
@@ -391,9 +407,20 @@ docker run -e API_PORT=8879 \
 ## 故障排除
 
 ### 模型文件缺失
-- Kokoro: 确保 `models/kokoro/kokoro-v1.0.onnx` 和 `models/kokoro/voices-v1.0.bin` 存在
+- Kokoro: 需要以下文件
   ```bash
-  make download
+  models/kokoro/
+  ├── kokoro-v1.0.onnx      # 模型文件 (310 MB)
+  ├── voices-v1.0.bin       # 音色 ZIP (27 MB)
+  ├── *.npy                 # 解压后的 54 个音色文件
+  └── voices.json           # 自动生成的音色映射
+  ```
+  
+  使用脚本自动下载和解压:
+  ```bash
+  make download-all   # 下载 Kokoro + MMS 马来文
+  # 或
+  make download       # 仅下载 Kokoro
   ```
 - MMS: 使用脚本下载
   ```bash

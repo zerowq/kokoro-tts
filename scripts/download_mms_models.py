@@ -9,6 +9,7 @@
   python scripts/download_mms_models.py                 # 只下载马来文
   python scripts/download_mms_models.py --all           # 下载所有支持的语言
   python scripts/download_mms_models.py --lang ms en id # 下载指定语言
+  python scripts/download_mms_models.py --check         # 仅检查已有模型
 """
 import sys
 import argparse
@@ -18,8 +19,6 @@ from loguru import logger
 
 ROOT_DIR = Path(__file__).parent.parent.absolute()
 sys.path.insert(0, str(ROOT_DIR))
-
-from transformers import VitsModel, AutoTokenizer
 
 # MMS 支持的语言
 SUPPORTED_LANGUAGES = {
@@ -39,6 +38,16 @@ def setup_logging():
     """配置日志"""
     logger.remove()
     logger.add(sys.stderr, format="<level>{message}</level>", level="INFO")
+
+def check_model_exists(language_code: str) -> bool:
+    """检查模型是否已存在"""
+    if language_code not in SUPPORTED_LANGUAGES:
+        return False
+    
+    model_name = SUPPORTED_LANGUAGES[language_code]
+    local_path = ROOT_DIR / "models" / model_name
+    
+    return local_path.exists() and (local_path / "config.json").exists()
 
 def download_language_model(language_code: str) -> bool:
     """
@@ -66,11 +75,20 @@ def download_language_model(language_code: str) -> bool:
     
     try:
         # 检查本地是否已存在
-        if local_path.exists() and (local_path / "config.json").exists():
+        if check_model_exists(language_code):
             logger.info(f"✅ 模型已存在: {local_path}")
             return True
         
         logger.info(f"🔄 下载中...")
+        
+        # 延迟导入 transformers (仅在需要时导入)
+        try:
+            from transformers import VitsModel, AutoTokenizer
+        except ImportError:
+            logger.error(f"❌ 需要安装 transformers 才能下载 MMS 模型")
+            logger.info(f"   请运行: make install-mms")
+            logger.info(f"   或: uv sync --group mms")
+            return False
         
         # 下载模型
         model = VitsModel.from_pretrained(huggingface_model)
@@ -129,6 +147,11 @@ def main():
         action="store_true",
         help="列出所有支持的语言"
     )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="检查已有模型，仅显示列表"
+    )
     
     args = parser.parse_args()
     
@@ -137,6 +160,41 @@ def main():
         logger.info("📋 Meta MMS-TTS 支持的语言:")
         for code, model in sorted(SUPPORTED_LANGUAGES.items()):
             logger.info(f"   {code:4} -> {model}")
+        return 0
+    
+    # 检查已有模型
+    if args.check:
+        logger.info("=" * 60)
+        logger.info("📂 已有的 MMS 模型检查")
+        logger.info("=" * 60)
+        
+        models_dir = ROOT_DIR / "models"
+        models_dir.mkdir(exist_ok=True)
+        
+        found_count = 0
+        missing_count = 0
+        
+        for code, model_name in sorted(SUPPORTED_LANGUAGES.items()):
+            local_path = models_dir / model_name
+            exists = check_model_exists(code)
+            
+            if exists:
+                size_mb = sum(f.stat().st_size for f in local_path.rglob("*") if f.is_file()) / 1024 / 1024
+                logger.info(f"   ✅ {code:4} ({model_name}) - {size_mb:.1f} MB")
+                found_count += 1
+            else:
+                logger.info(f"   ❌ {code:4} ({model_name}) - 缺失")
+                missing_count += 1
+        
+        logger.info("")
+        logger.info(f"📊 统计: {found_count} 个已有, {missing_count} 个缺失")
+        
+        if missing_count > 0:
+            logger.info("")
+            logger.info("💡 下载缺失的模型:")
+            logger.info("   python scripts/download_mms_models.py --lang ms en  # 下载指定语言")
+            logger.info("   python scripts/download_mms_models.py --all         # 下载全部")
+        
         return 0
     
     # 确定要下载的语言

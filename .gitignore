@@ -35,9 +35,8 @@ ENV/
 .DS_Store
 
 # Project specific
-# 模型文件不上传到 Git，需要用脚本下载
-models/kokoro/*.onnx
-models/kokoro/*.bin
+# 模型目录不上传到 Git（使用脚本下载）
+models/
 output/
 *.wav
 *.mp3

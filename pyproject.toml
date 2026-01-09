@@ -1,0 +1,39 @@
+[project]
+name = "kokoro-tts"
+version = "0.1.0"
+description = "Lightweight Kokoro-82M TTS Service with ONNX acceleration"
+readme = "README.md"
+requires-python = ">=3.9, <3.12"
+dependencies = [
+    # Web Service
+    "fastapi>=0.115.6",
+    "uvicorn>=0.30.0",
+    "pydantic>=2.7.0",
+    "python-dotenv>=1.0.1",
+    "loguru>=0.5.3",
+    
+    # Audio Processing
+    "soundfile>=0.12.1",
+    "numpy<2.0.0",
+    "scipy>=1.11.0",
+    
+    # Kokoro ONNX Runtime
+    "kokoro-onnx>=0.2.0",
+    "onnx>=1.16.0",
+    "onnxruntime>=1.18.0; sys_platform == 'darwin' or sys_platform == 'win32'",
+    "onnxruntime-gpu>=1.18.0; sys_platform == 'linux'",
+    
+    # Utils
+    "rich>=13.7.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "httpx>=0.26.0",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+index-strategy = "unsafe-best-match"

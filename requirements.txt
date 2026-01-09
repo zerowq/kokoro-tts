@@ -1,0 +1,19 @@
+# Web Service
+fastapi==0.115.6
+uvicorn==0.30.0
+pydantic==2.7.0
+python-dotenv==1.0.1
+loguru==0.5.3
+
+# Audio Processing
+soundfile==0.12.1
+numpy==1.26.4
+scipy>=1.11.0
+
+# Kokoro ONNX Runtime (独立依赖，避免 torch 冲突)
+kokoro-onnx>=0.2.0
+onnx>=1.16.0
+onnxruntime>=1.18.0
+
+# Utils
+rich==13.7.1

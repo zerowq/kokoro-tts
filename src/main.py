@@ -81,15 +81,15 @@ async def synthesize(request: TTSRequest):
 @app.get("/api/tts/stream")
 @app.post("/api/tts/stream")
 async def synthesize_stream(
-    text: str = None, 
+    text: Optional[str] = None, 
     voice: Optional[str] = "af_sarah", 
     lang: Optional[str] = "en-us", 
     speed: Optional[float] = 1.0,
     request: Optional[TTSRequest] = None
 ):
-    """流式合成语音 (支持 GET 和 POST)"""
+    """流式合成语音 API (兼容多种传参方式)"""
     try:
-        # 兼容处理 GET 参数和 POST body
+        # 1. 优先级: POST Body > GET Query
         if request:
             text = request.text
             voice = request.voice
@@ -106,10 +106,14 @@ async def synthesize_stream(
             lang=lang,
             speed=speed
         )
+        
+        # 为了让浏览器直接播放，这里必须返回完整的二进制流 (包含 WAV 头的模拟)
+        # 注意：由于 Kokoro 目前是整段生成，我们直接将生成好的结果流式吐出
         return StreamingResponse(gen, media_type="audio/wav")
     except Exception as e:
-        logger.error(f"❌ Api error: {e}")
+        logger.error(f"❌ API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 if __name__ == "__main__":

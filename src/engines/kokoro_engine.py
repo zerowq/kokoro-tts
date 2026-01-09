@@ -34,14 +34,29 @@ class KokoroEngine:
                     raise FileNotFoundError(f"Voices file not found: {self.voices_path}")
 
                 start_time = time.time()
-                logger.info(f"🔄 Initializing Kokoro-ONNX v1.0...")
                 
-                # 使用官方 API 初始化
+                # 📢 强制开启 GPU 加速 (针对 Linux GPU 机器)
+                if "ONNX_PROVIDER" not in os.environ:
+                    import torch
+                    if torch.cuda.is_available():
+                        os.environ["ONNX_PROVIDER"] = "CUDAExecutionProvider"
+                        logger.info("🚀 GPU detected, enabling CUDAExecutionProvider for Kokoro")
+                    else:
+                        os.environ["ONNX_PROVIDER"] = "CPUExecutionProvider"
+
+                logger.info(f"🔄 Initializing Kokoro-ONNX v1.0 (Provider: {os.environ.get('ONNX_PROVIDER')})...")
+                
+                # 初始化
                 self._kokoro = Kokoro(self.model_path, self.voices_path)
                 
+                # 检查确认最终选用的 Provider
+                actual_providers = self._kokoro.sess.get_providers()
+                logger.info(f"📊 Actual ONNX Providers: {actual_providers}")
+
                 self._loaded = True
                 elapsed = time.time() - start_time
                 logger.info(f"✅ Kokoro-ONNX v1.0 loaded in {elapsed:.4f}s!")
+
             except Exception as e:
                 logger.error(f"❌ Failed to load Kokoro-ONNX: {e}")
                 raise
@@ -90,17 +105,18 @@ class KokoroEngine:
     def synthesize_stream(self, text: str, voice: str = "af_sarah", lang: str = "en-us",
                           speed: float = 1.0) -> Generator[bytes, None, None]:
         """
-        流式合成 (将整段音频分块返回)
-        注意：kokoro-onnx 目前不支持原生流式，这里模拟分块返回
-        返回 float32 字节流，以适配前端 Float32Array
+        流式合成 (将生成的音频封装为标准 WAV 字节流)
         """
+        import io
+        import soundfile as sf
+        
         samples = self.synthesize(text, voice, lang, speed)
         
-        # 确保是 float32 类型
-        float_audio = samples.astype(np.float32)
+        # 将结果写入内存中的 WAV 格式
+        buffer = io.BytesIO()
+        sf.write(buffer, samples, self.sample_rate, format='WAV')
+        buffer.seek(0)
         
-        # 分块返回 (每块约 0.5 秒)
-        # float32 每个采样占用 4 字节
-        chunk_size = self.sample_rate // 2 
-        for i in range(0, len(float_audio), chunk_size):
-            yield float_audio[i:i + chunk_size].tobytes()
+        # 吐出字节
+        yield buffer.read()
+

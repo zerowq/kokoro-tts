@@ -31,8 +31,9 @@ WORKDIR /app
 # 拷贝依赖定义
 COPY pyproject.toml .
 
-# 安装依赖：使用最新的 onnxruntime-gpu 以更好地支持 CUDA 12
+# 安装依赖：使用 CUDA 12 专属优化 build
 RUN uv pip install --system \
+    --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/ \
     onnxruntime-gpu \
     kokoro-onnx \
     torch \
@@ -43,6 +44,7 @@ RUN uv pip install --system \
     loguru \
     soundfile \
     "numpy<2.0.0"
+
 
 # 拷贝代码
 COPY . .

@@ -23,36 +23,57 @@ cd kokoro-tts
 # 使用 uv (推荐)
 uv sync
 
-# 或使用 pip
+# 或使用 pip (备用)
 pip install -r requirements.txt
 ```
 
+> 💡 不了解 UV？查看 [SETUP.md](SETUP.md) 了解详情
+
 ### 3. 下载模型
 
-从 [kokoro-onnx releases](https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0) 下载：
+**自动下载** (推荐):
+```bash
+make download
+# 或
+uv run python scripts/download_models.py
+```
+
+**手动下载**:
+从 [GitHub releases](https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0) 下载到 `models/kokoro/`:
 - `kokoro-v1.0.onnx`
 - `voices.json`
-
-放置到 `models/kokoro/` 目录：
-```bash
-mkdir -p models/kokoro
-# 将下载的文件放到上述目录
-```
 
 ## 使用
 
 ### 启动 API 服务
 ```bash
+# 使用脚本
 ./start.sh
-# 或
-python -m src.main
+
+# 或直接使用 uv
+uv run python -m src.main
+
+# 或使用 make
+make run
 ```
 
 API 文档将在 `http://localhost:8080/docs` 可用
 
 ### 快速测试
 ```bash
-python scripts/test_simple.py
+make test
+# 或
+uv run python scripts/test_simple.py
+```
+
+### 项目管理命令
+```bash
+make help              # 查看所有命令
+make install           # 安装依赖
+make download          # 下载模型
+make run              # 启动服务
+make test             # 运行测试
+make clean            # 清理环境
 ```
 
 ## API 接口
@@ -89,6 +110,33 @@ curl http://localhost:8080/api/health
 - `bm_george` - 男性英式英语
 - 更多音色见 [kokoro-onnx 文档](https://github.com/thewh1teagle/kokoro-onnx)
 
+## 项目结构
+
+```
+kokoro-tts/
+├── src/
+│   ├── main.py              # FastAPI 应用
+│   ├── config.py            # 配置
+│   ├── core/
+│   │   └── service.py       # 业务逻辑
+│   └── engines/
+│       └── kokoro_engine.py # Kokoro 推理引擎
+├── scripts/
+│   ├── download_models.py   # 模型下载脚本
+│   ├── test_simple.py       # 快速测试
+│   └── test_kokoro.py       # 详细测试
+├── models/
+│   └── kokoro/              # 模型文件目录 (自动管理)
+├── output/                  # 输出音频目录
+├── pyproject.toml           # UV 项目配置
+├── uv.lock                  # 依赖锁定
+├── requirements.txt         # PIP 依赖列表
+├── Makefile                 # 项目管理
+├── .python-version          # Python 版本指定
+├── README.md                # 详细文档
+└── start.sh                 # 启动脚本
+```
+
 ## 配置
 
 编辑 `src/config.py` 修改：
@@ -104,6 +152,44 @@ curl http://localhost:8080/api/health
 - **仅依赖 ONNX Runtime**: 轻量级推理库
 
 这样可以在同一服务器上与其他 TTS 引擎并存，互不影响。
+
+## UV 项目管理
+
+本项目使用 [UV](https://docs.astral.sh/uv/) 作为依赖管理和虚拟环境工具。
+
+### 核心文件
+- `pyproject.toml` - 项目配置和依赖定义
+- `uv.lock` - 依赖版本锁定 (自动生成)
+- `.python-version` - Python 版本指定
+- `Makefile` - 快捷命令集合
+
+### 常用命令
+```bash
+uv sync              # 安装/更新依赖并创建虚拟环境
+uv run <command>     # 在虚拟环境中运行命令
+uv add <package>     # 添加新依赖
+uv remove <package>  # 移除依赖
+```
+
+### 模型文件管理
+
+模型文件在 Git 中被忽略 (`.gitignore`)，需要通过脚本下载：
+
+```bash
+# 自动下载所有模型
+make download
+
+# 或直接运行脚本
+uv run python scripts/download_models.py
+
+# 验证模型文件
+ls -lh models/kokoro/
+```
+
+下载脚本会自动：
+1. 从 GitHub releases 下载最新模型
+2. 验证文件完整性
+3. 显示下载进度
 
 ## Docker 部署
 

@@ -3,20 +3,14 @@
 ## 3 步快速启动
 
 ### 1️⃣ 下载模型文件
-从 [kokoro-onnx releases](https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0) 下载：
 ```bash
-# 创建目录
-mkdir -p models/kokoro
-
-# 下载到 models/kokoro/:
-# - kokoro-v1.0.onnx
-# - voices.json
+uv run python scripts/download_models.py
 ```
+
+自动下载到 `models/kokoro/`，或手动从 [GitHub releases](https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0) 下载
 
 ### 2️⃣ 安装依赖
 ```bash
-pip install -r requirements.txt
-# 或使用 uv
 uv sync
 ```
 
@@ -24,7 +18,7 @@ uv sync
 ```bash
 ./start.sh
 # 或直接运行
-python -m src.main
+uv run python -m src.main
 ```
 
 ✅ 服务运行在 `http://localhost:8080`

@@ -35,5 +35,7 @@ dev = [
 
 [tool.uv]
 default-groups = ["dev"]
-index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-index-strategy = "unsafe-best-match"
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"

@@ -35,11 +35,14 @@ ENV/
 .DS_Store
 
 # Project specific
+# 模型文件不上传到 Git，需要用脚本下载
 models/kokoro/*.onnx
 models/kokoro/*.bin
 output/
 *.wav
 *.mp3
+output/
+.venv/
 
 # Logs
 *.log

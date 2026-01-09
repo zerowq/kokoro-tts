@@ -138,14 +138,19 @@ def benchmark_kokoro(provider="auto"):
         logger.info("⏱️  [Kokoro] 开始合成测试...")
         for i, text in enumerate(TEST_TEXTS["en"]):
             output_file = str(output_dir / f"kokoro_{provider}_{i+1}.wav")
-            start = time.time()
-            engine.synthesize(text, voice="af_sarah", lang="en-us", output_path=output_file)
+            audio = engine.synthesize(text, voice="af_sarah", lang="en-us", output_path=output_file)
             elapsed = time.time() - start
+            
+            # 计算音频时长
+            duration = len(audio) / 24000  # Kokoro 采样率固定 24k
+            
             results["synthesis_times"].append({
                 "text_length": len(text),
                 "time_seconds": elapsed,
+                "duration": duration,
                 "output_file": output_file,
             })
+
             logger.info(f"  ✓ Text {i+1} ({len(text)} chars): {elapsed:.2f}s")
         
         results["peak_gpu_memory_mb"] = get_peak_gpu_memory_mb()
@@ -225,14 +230,20 @@ def benchmark_mms(device="auto"):
         logger.info("⏱️  [MMS] 开始合成测试 (Malay/马来文)...")
         for i, text in enumerate(TEST_TEXTS["ms"]):
             output_file = str(output_dir / f"mms_{device}_{i+1}.wav")
-            start = time.time()
-            engine.synthesize(text, language="ms", output_path=output_file)
+            audio = engine.synthesize(text, language="ms", output_path=output_file)
             elapsed = time.time() - start
+            
+            # 计算音频时长
+            sample_rate = engine.get_sample_rate("ms")
+            duration = len(audio) / sample_rate
+            
             results["synthesis_times"].append({
                 "text_length": len(text),
                 "time_seconds": elapsed,
+                "duration": duration,
                 "output_file": output_file,
             })
+
             logger.info(f"  ✓ Text {i+1} ({len(text)} chars): {elapsed:.2f}s")
         
         results["peak_gpu_memory_mb"] = get_peak_gpu_memory_mb()
@@ -276,17 +287,23 @@ def print_comparison(results_list):
         if res['peak_gpu_memory_mb'] >= 0:
             print(f"   {'   (峰值)':<30} {res['peak_gpu_memory_mb']:.1f} MB")
     
-    # 4. 合成速度
-    print("\n⏱️  合成速度对比:")
-    print(f"   {'模型':<30} {'文本长度':<15} {'时间(s)':<15} {'字符/秒':<15}")
-    print("   " + "-" * 75)
+    # 4. 合成速度对比 (详细报表)
+    print("\n⏱️  合成速度对比 (详细报表):")
+    header = f"   {'模型':<25} {'文本':<6} {'耗时(s)':<8} {'时长(s)':<8} {'速度':<8} {'RTF':<8}"
+    print(header)
+    print("   " + "-" * len(header))
     
     for res in results_list:
         for item in res['synthesis_times']:
             text_len = item['text_length']
             time_sec = item['time_seconds']
-            chars_per_sec = text_len / time_sec if time_sec > 0 else 0
-            print(f"   {res['model']:<30} {text_len:<15} {time_sec:<15.2f} {chars_per_sec:<15.1f}")
+            duration = item['duration']
+            
+            speed = duration / time_sec if time_sec > 0 else 0
+            rtf = time_sec / duration if duration > 0 else 0
+            
+            print(f"   {res['model']:<25} {text_len:<6} {time_sec:<8.2f} {duration:<8.2f} {speed:<8.1f}x {rtf:<8.3f}")
+
     
     # 5. 音频文件位置
     print("\n🎵 生成的音频文件:")

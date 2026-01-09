@@ -18,9 +18,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libsndfile1 git curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 创建软连接
-RUN ln -s /usr/bin/python3.10 /usr/bin/python3 && \
-    ln -s /usr/bin/python3 /usr/bin/python
+# 创建软连接 (使用 -sf 强制覆盖已存在的链接)
+RUN ln -sf /usr/bin/python3.10 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3 /usr/bin/python
+
 
 # 安装 uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/

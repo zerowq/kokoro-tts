@@ -33,35 +33,40 @@ class KokoroEngine:
                 if not os.path.exists(self.voices_path):
                     raise FileNotFoundError(f"Voices file not found: {self.voices_path}")
 
-                start_time = time.time()
+                # 📢 强制开启 GPU 调度 (补丁级别)
+                import onnxruntime as ort
+                available_providers = ort.get_available_providers()
+                logger.info(f"🔍 System Available ONNX Providers: {available_providers}")
                 
-                # 📢 强制开启 GPU 加速
-                if "ONNX_PROVIDER" not in os.environ:
-                    import torch
-                    if torch.cuda.is_available():
-                        os.environ["ONNX_PROVIDER"] = "CUDAExecutionProvider"
-                        logger.info("🚀 GPU detected, enabling CUDAExecutionProvider for Kokoro")
-                    else:
-                        os.environ["ONNX_PROVIDER"] = "CPUExecutionProvider"
-
-                logger.info(f"🔄 Initializing Kokoro-ONNX v1.0 (Provider: {os.environ.get('ONNX_PROVIDER')})...")
+                # 显式指定 Provider 顺序，确保 CUDA 在最前面
+                target_providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+                if 'TensorrtExecutionProvider' in available_providers:
+                    target_providers.insert(0, 'TensorrtExecutionProvider')
                 
-                # 🛠️ 修复 ValueError: This file contains pickled (object) data 和编码问题
+                # 🐒 猴子补丁：强制劫持 InferenceSession 的创建行为
+                original_session = ort.InferenceSession
+                def forced_gpu_session(path_or_bytes, sess_options=None, providers=None, **kwargs):
+                    # 无论内部库怎么传，我们强制覆盖为 GPU 优先
+                    return original_session(path_or_bytes, sess_options=sess_options, providers=target_providers, **kwargs)
+                
                 import json
                 original_load = np.load
                 original_json_load = json.load
                 
-                # 猴子补丁：强制允许 pickle，并确保 json 读取使用 utf-8
+                # 注入补丁
+                ort.InferenceSession = forced_gpu_session
                 np.load = lambda *a, **k: original_load(*a, allow_pickle=True, **k)
                 json.load = lambda f, **k: original_json_load(f, **k)
                 
                 try:
-                    # 初始化 (此时 config.py 中 KOKORO_VOICES 指向 voices.json)
+                    logger.info(f"🚀 Initializing Kokoro with FORCED GPU Providers: {target_providers}")
                     self._kokoro = Kokoro(self.model_path, self.voices_path)
                 finally:
-                    # 还原补丁
+                    # 卸载补丁，恢复系统原样
+                    ort.InferenceSession = original_session
                     np.load = original_load
                     json.load = original_json_load
+
 
                 
                 # 检查确认最终选用的 Provider

@@ -29,8 +29,9 @@ WORKDIR /app
 # 先拷贝项目元数据，利用缓存层
 COPY pyproject.toml .
 
-# 安装核心依赖 (包括 GPU 版 ONNX 和 Torch)
-RUN uv pip install --system onnxruntime-gpu torch transformers scipy fastapi uvicorn loguru soundfile numpy
+# 安装核心依赖 (包括 GPU 版 ONNX, Kokoro 和 Torch)
+RUN uv pip install --system onnxruntime-gpu kokoro-onnx torch transformers scipy fastapi uvicorn loguru soundfile numpy
+
 
 # 拷贝代码
 COPY . .

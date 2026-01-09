@@ -35,7 +35,7 @@ class KokoroEngine:
 
                 start_time = time.time()
                 
-                # 📢 强制开启 GPU 加速 (针对 Linux GPU 机器)
+                # 📢 强制开启 GPU 加速
                 if "ONNX_PROVIDER" not in os.environ:
                     import torch
                     if torch.cuda.is_available():
@@ -46,12 +46,22 @@ class KokoroEngine:
 
                 logger.info(f"🔄 Initializing Kokoro-ONNX v1.0 (Provider: {os.environ.get('ONNX_PROVIDER')})...")
                 
-                # 初始化
-                self._kokoro = Kokoro(self.model_path, self.voices_path)
+                # 🛠️ 修复 ValueError: This file contains pickled (object) data
+                # 由于 kokoro-onnx 内部调用 np.load(voices_path) 但未设置 allow_pickle=True
+                original_load = np.load
+                np.load = lambda *a, **k: original_load(*a, allow_pickle=True, **k)
+                
+                try:
+                    # 初始化
+                    self._kokoro = Kokoro(self.model_path, self.voices_path)
+                finally:
+                    # 还原 np.load 避免影响系统其他部分
+                    np.load = original_load
                 
                 # 检查确认最终选用的 Provider
                 actual_providers = self._kokoro.sess.get_providers()
                 logger.info(f"📊 Actual ONNX Providers: {actual_providers}")
+
 
                 self._loaded = True
                 elapsed = time.time() - start_time

@@ -21,7 +21,7 @@ uv sync
 uv run python -m src.main
 ```
 
-✅ 服务运行在 `http://localhost:8080`
+✅ 服务运行在 `http://localhost:8879`
 
 ## 测试
 
@@ -30,7 +30,7 @@ uv run python -m src.main
 python scripts/test_simple.py
 
 # 查看 API 文档
-# 访问 http://localhost:8080/docs
+# 访问 http://localhost:8879/docs
 ```
 
 ## 使用示例
@@ -39,7 +39,7 @@ python scripts/test_simple.py
 ```python
 import requests
 
-response = requests.post('http://localhost:8080/api/tts', json={
+response = requests.post('http://localhost:8879/api/tts', json={
     'text': 'Hello world',
     'voice': 'af_sarah',
     'lang': 'en-us'
@@ -51,7 +51,7 @@ print(response.json())
 
 ### cURL
 ```bash
-curl -X POST http://localhost:8080/api/tts \
+curl -X POST http://localhost:8879/api/tts \
   -H "Content-Type: application/json" \
   -d '{"text": "Hello world"}'
 ```

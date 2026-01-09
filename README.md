@@ -57,7 +57,7 @@ uv run python -m src.main
 make run
 ```
 
-API 文档将在 `http://localhost:8080/docs` 可用
+API 文档将在 `http://localhost:8879/docs` 可用
 
 ### 快速测试
 ```bash
@@ -80,7 +80,7 @@ make clean            # 清理环境
 
 ### 1. 合成语音 (非流式)
 ```bash
-curl -X POST http://localhost:8080/api/tts \
+curl -X POST http://localhost:8879/api/tts \
   -H "Content-Type: application/json" \
   -d '{
     "text": "Hello world",
@@ -92,14 +92,14 @@ curl -X POST http://localhost:8080/api/tts \
 
 ### 2. 流式合成
 ```bash
-curl -X POST http://localhost:8080/api/tts/stream \
+curl -X POST http://localhost:8879/api/tts/stream \
   -H "Content-Type: application/json" \
   -d '{"text": "Hello world"}' > output.wav
 ```
 
 ### 3. 健康检查
 ```bash
-curl http://localhost:8080/api/health
+curl http://localhost:8879/api/health
 ```
 
 ## 支持的音色
@@ -195,7 +195,7 @@ ls -lh models/kokoro/
 
 ```bash
 docker build -t kokoro-tts .
-docker run -p 8080:8080 -v $(pwd)/models:/app/models kokoro-tts
+docker run -p 8879:8879 -v $(pwd)/models:/app/models kokoro-tts
 ```
 
 ## 故障排除

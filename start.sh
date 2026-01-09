@@ -18,6 +18,6 @@ if [ ! -f "models/kokoro/kokoro-v1.0.onnx" ] || [ ! -f "models/kokoro/voices.jso
 fi
 
 echo "✅ 模型文件就绪"
-echo "🚀 启动 API 服务: http://localhost:8080"
+echo "🚀 启动 API 服务: http://localhost:8879"
 echo ""
 uv run python -m src.main

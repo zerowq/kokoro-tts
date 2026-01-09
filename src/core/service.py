@@ -165,13 +165,16 @@ class TTSService:
             # 如果没切出来（没标点），就用全文
             if not chunks: chunks = [text]
 
-            # 3. 发送流式 WAV 头部 (采样率统一为 24k)
+            # 3. 发送流式 WAV 头部 (统一 24000Hz)
             import struct
-            # 设置数据长度为 0x7FFFFFFF (约 2GB)，让浏览器认为是超长流
+            # 设置数据长度为 0x7FFFFFFF，让浏览器认为是流媒体
             wav_header = struct.pack('<4sI4s4sIHHIIHH4sI',
                 b'RIFF', 0x7FFFFFFF, b'WAVE', b'fmt ', 16, 1, 1,
                 24000, 24000 * 2, 2, 16, b'data', 0x7FFFFFFF)
             yield wav_header
+
+            from scipy.signal import resample
+            import numpy as np
 
             for i, chunk in enumerate(chunks):
                 if not chunk.strip(): continue
@@ -180,18 +183,22 @@ class TTSService:
                 if engine == 'mms':
                     lang_code = lang.split('-')[0] if '-' in lang else lang
                     audio_data = self.mms.synthesize(chunk, language=lang_code)
-                    # 确保数据是 int16
-                    import numpy as np
-                    if audio_data.dtype != np.int16:
-                        audio_data = (audio_data * 32767).astype(np.int16)
-                    yield audio_data.tobytes()
-                else:
-                    # Kokoro 获取原始数据
-                    samples, _ = self.kokoro._kokoro.create(chunk, voice=voice, speed=speed, lang=lang)
+                    source_sr = self.mms.get_sample_rate(lang_code)
+                    
+                    # 采样率对齐：从 16k (MMS) 转到 24k (Kokoro/Header)
+                    if source_sr != 24000:
+                        num_samples = int(len(audio_data) * 24000 / source_sr)
+                        audio_data = resample(audio_data, num_samples)
+                    
                     # 转换为 16bit PCM
-                    import numpy as np
+                    pcm_data = (audio_data * 32767).astype(np.int16)
+                    yield pcm_data.tobytes()
+                else:
+                    # Kokoro 获取原始数据 (默认 24k)
+                    samples, _ = self.kokoro._kokoro.create(chunk, voice=voice, speed=speed, lang=lang)
                     pcm_data = (samples * 32767).astype(np.int16)
                     yield pcm_data.tobytes()
+
 
 
         except Exception as e:

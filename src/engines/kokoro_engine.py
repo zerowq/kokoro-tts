@@ -46,17 +46,23 @@ class KokoroEngine:
 
                 logger.info(f"🔄 Initializing Kokoro-ONNX v1.0 (Provider: {os.environ.get('ONNX_PROVIDER')})...")
                 
-                # 🛠️ 修复 ValueError: This file contains pickled (object) data
-                # 由于 kokoro-onnx 内部调用 np.load(voices_path) 但未设置 allow_pickle=True
+                # 🛠️ 修复 ValueError: This file contains pickled (object) data 和编码问题
+                import json
                 original_load = np.load
+                original_json_load = json.load
+                
+                # 猴子补丁：强制允许 pickle，并确保 json 读取使用 utf-8
                 np.load = lambda *a, **k: original_load(*a, allow_pickle=True, **k)
+                json.load = lambda f, **k: original_json_load(f, **k)
                 
                 try:
-                    # 初始化
+                    # 初始化 (此时 config.py 中 KOKORO_VOICES 指向 voices.json)
                     self._kokoro = Kokoro(self.model_path, self.voices_path)
                 finally:
-                    # 还原 np.load 避免影响系统其他部分
+                    # 还原补丁
                     np.load = original_load
+                    json.load = original_json_load
+
                 
                 # 检查确认最终选用的 Provider
                 actual_providers = self._kokoro.sess.get_providers()

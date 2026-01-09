@@ -33,11 +33,11 @@
         }
 
         .container {
-            width: 90%;
+            width: 95%;
             max-width: 800px;
             background: var(--glass);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
             border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 24px;
             padding: 40px;
@@ -60,7 +60,7 @@
         h1 {
             font-weight: 600;
             font-size: 2.5rem;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
             background: linear-gradient(to right, #fff, #9d50bb);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -69,9 +69,9 @@
 
         p.subtitle {
             text-align: center;
-            color: rgba(255, 255, 255, 0.7);
+            color: rgba(255, 255, 255, 0.6);
             margin-bottom: 30px;
-            font-size: 1.1rem;
+            font-size: 1rem;
         }
 
         .controls {
@@ -88,15 +88,15 @@
         }
 
         label {
-            font-size: 0.9rem;
-            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.7);
             margin-left: 5px;
         }
 
         select,
         textarea,
         input {
-            background: rgba(0, 0, 0, 0.3);
+            background: rgba(0, 0, 0, 0.4);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 12px;
             padding: 12px 15px;
@@ -108,7 +108,7 @@
         select:focus,
         textarea:focus {
             border-color: var(--primary);
-            box-shadow: 0 0 15px rgba(157, 80, 187, 0.3);
+            box-shadow: 0 0 15px rgba(157, 80, 187, 0.2);
         }
 
         textarea {
@@ -120,77 +120,52 @@
             margin-bottom: 25px;
         }
 
-        .button-row {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-        }
-
         button {
-            flex: 1;
+            width: 100%;
             background: linear-gradient(to right, var(--primary), var(--secondary));
             border: none;
             border-radius: 12px;
-            padding: 15px;
+            padding: 16px;
             color: white;
             font-weight: 600;
-            font-size: 1rem;
+            font-size: 1.1rem;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: all 0.3s;
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
         }
 
-        button:hover {
+        button:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 10px 20px rgba(157, 80, 187, 0.4);
         }
 
-        button:active {
-            transform: translateY(0);
-        }
-
         button:disabled {
-            background: #444;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
+            background: #333;
+            color: #777;
+            cursor: wait;
         }
 
         .audio-player {
             margin-top: 30px;
-            background: rgba(0, 0, 0, 0.2);
+            background: rgba(255, 255, 255, 0.05);
             border-radius: 16px;
-            padding: 20px;
+            padding: 15px;
             display: none;
-            animation: slideUp 0.5s ease-out;
-        }
-
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
         }
 
         audio {
             width: 100%;
-            height: 40px;
         }
 
         .status {
             text-align: center;
             margin-top: 15px;
             font-size: 0.9rem;
-            color: var(--primary);
-            min-height: 1.2rem;
+            color: #9d50bb;
+            height: 1.2rem;
         }
 
         .loader {
@@ -209,21 +184,19 @@
             }
         }
 
-        /* Tags */
-        .features {
+        .footer-tags {
             display: flex;
             justify-content: center;
-            gap: 15px;
+            gap: 10px;
             margin-top: 30px;
         }
 
-        .feature-tag {
-            font-size: 0.75rem;
-            background: rgba(255, 255, 255, 0.05);
-            padding: 5px 12px;
-            border-radius: 20px;
-            color: rgba(255, 255, 255, 0.5);
+        .tag {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.3);
             border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 4px 10px;
+            border-radius: 10px;
         }
     </style>
 </head>
@@ -231,21 +204,21 @@
 <body>
     <div class="container">
         <h1>Kokoro TTS</h1>
-        <p class="subtitle">轻量级极速语音合成 (GPU 加速已启用)</p>
+        <p class="subtitle">极速语音合成 (GPU 加速) - 全自动化流式播放</p>
 
         <div class="controls">
             <div class="input-group">
-                <label>选择音色 / Voice</label>
+                <label>选择音色与模型</label>
                 <select id="voiceSelect">
-                    <optgroup label="English 英文 (Kokoro)">
-                        <option value="af_sarah">Sarah (Female)</option>
-                        <option value="am_michael">Michael (Male)</option>
+                    <optgroup label="Kokoro (English)">
+                        <option value="af_sarah" data-lang="en-us">Sarah (Female)</option>
+                        <option value="am_michael" data-lang="en-us">Michael (Male)</option>
                     </optgroup>
-                    <optgroup label="Malay 马来文 (MMS)">
-                        <option value="mms_ms">Malay (马来文模型)</option>
+                    <optgroup label="Multi-Language (Automatic)">
+                        <option value="mms" data-lang="ms">Malay 马来文 (Kokoro 自动分流)</option>
+                        <option value="mms_ms" data-lang="ms">Malay 马来文 (MMS 专属模型)</option>
                     </optgroup>
                 </select>
-
             </div>
             <div class="input-group">
                 <label>播放语速 / Speed</label>
@@ -253,102 +226,90 @@
             </div>
         </div>
 
-        <textarea id="textInput" placeholder="请输入要合成的文本... (Enter text to synthesize)"></textarea>
+        <textarea id="textInput" placeholder="输入文本..."></textarea>
 
-        <div class="button-row">
-            <button id="synthBtn">
-                <div class="loader" id="loader"></div>
-                🚀 立即合成并播放
-            </button>
+        <button id="synthBtn">
+            <div class="loader" id="loader"></div>
+            ⚡ 立即合成并自动播放
+        </button>
+
+        <p class="status" id="statusField"></p>
+
+        <div class="audio-player" id="audioSection">
+            <audio id="audioPlayer" controls></audio>
         </div>
 
-        <div class="status" id="statusMessage"></div>
-
-        <div class="audio-player" id="playerContainer">
-            <audio id="mainAudio" controls></audio>
-        </div>
-
-        <div class="features">
-            <div class="feature-tag">ONNX Runtime</div>
-            <div class="feature-tag">CUDA Accelerated</div>
-            <div class="feature-tag">Massively Multilingual</div>
+        <div class="footer-tags">
+            <span class="tag">Automatic Routing</span>
+            <span class="tag">Streaming Performance</span>
+            <span class="tag">CUDA Native</span>
         </div>
     </div>
 
     <script>
         const synthBtn = document.getElementById('synthBtn');
-        const loader = document.getElementById('loader');
         const textInput = document.getElementById('textInput');
         const voiceSelect = document.getElementById('voiceSelect');
         const speedInput = document.getElementById('speedInput');
-        const statusMsg = document.getElementById('statusMessage');
-        const playerContainer = document.getElementById('playerContainer');
-        const audio = document.getElementById('mainAudio');
+        const statusField = document.getElementById('statusField');
+        const audioSection = document.getElementById('audioSection');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const loader = document.getElementById('loader');
 
-        // 设置默认文本
-        textInput.value = "Hello, welcome to Kokoro TTS. This is a very lightweight and fast speech synthesis model running on absolute performance.";
+        // 默认初始化
+        textInput.value = "Hello, welcome to Kokoro TTS. This is the fastest synthesis engine on GPU.";
 
-        synthBtn.onclick = async () => {
+        synthBtn.onclick = () => {
             const text = textInput.value.trim();
             if (!text) return;
 
+            const selectedOption = voiceSelect.options[voiceSelect.selectedIndex];
             const voice = voiceSelect.value;
+            const lang = selectedOption.getAttribute('data-lang');
             const speed = speedInput.value;
 
-            // 状态更新
+            // 状态变更
             synthBtn.disabled = true;
             loader.style.display = 'block';
-            statusMsg.innerText = "⏳ 正在合成中，请稍候...";
-            playerContainer.style.display = 'none';
+            statusField.innerText = "🚀 引擎已启动，正在流式合成中...";
+            audioSection.style.display = 'none';
 
-            try {
-                // 如果是 MMS 音色，可能需要指定语言
-                let lang = "en-us";
-                let actualVoice = voice;
+            // 直接构建 GET URL 实现浏览器原生流式加载
+            const queryParams = new URLSearchParams({
+                text: text,
+                voice: voice,
+                lang: lang,
+                speed: speed
+            });
 
-                if (voice.startsWith('mms_')) {
-                    lang = voice.split('_')[1];
-                    actualVoice = "mms"; // 后端逻辑可能根据服务类判断
-                }
+            const streamUrl = `/api/tts/stream?${queryParams.toString()}`;
 
-                const response = await fetch('/api/tts/stream', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        text,
-                        voice: actualVoice,
-                        lang: lang,
-                        speed: parseFloat(speed)
-                    })
-                });
+            // 关键：直接将 URL 赋值给 audio 标签，实现“边合成边播放”
+            audioPlayer.src = streamUrl;
+            audioSection.style.display = 'block';
 
-                if (!response.ok) throw new Error("合成请求失败");
-
-                const blob = await response.blob();
-                const url = URL.createObjectURL(blob);
-
-                audio.src = url;
-                playerContainer.style.display = 'block';
-                statusMsg.innerText = "✅ 合成成功！";
-                audio.play();
-
-            } catch (err) {
-                statusMsg.innerText = "❌ 发生错误: " + err.message;
-            } finally {
+            audioPlayer.oncanplay = () => {
+                statusField.innerText = "✅ 正在播放音频流...";
                 synthBtn.disabled = false;
                 loader.style.display = 'none';
-            }
+                audioPlayer.play();
+            };
+
+            audioPlayer.onerror = () => {
+                statusField.innerText = "❌ 合成出错，请检查后台日志";
+                synthBtn.disabled = false;
+                loader.style.display = 'none';
+            };
         };
 
-        // 语言切换示例
         voiceSelect.onchange = () => {
-            if (voiceSelect.value === 'mms_ms') {
-                textInput.value = "Halo, selamat datang ke Kokoro TTS. Ini adalah sistem sintesis pertuturan yang sangat pantas.";
+            const selectedOption = voiceSelect.options[voiceSelect.selectedIndex];
+            if (selectedOption.getAttribute('data-lang') === 'ms') {
+                textInput.value = "Halo, selamat datang ke perkhidmatan TTS kami. Ini dihasilkan oleh model MMS.";
             } else {
-                textInput.value = "Hello, welcome to Kokoro TTS. This is a very lightweight and fast speech synthesis model.";
+                textInput.value = "Hello, welcome to Kokoro TTS. This is the fastest synthesis engine on GPU.";
             }
         };
-
     </script>
 </body>
 

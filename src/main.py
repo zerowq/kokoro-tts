@@ -78,20 +78,39 @@ async def synthesize(request: TTSRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/tts/stream")
 @app.post("/api/tts/stream")
-async def synthesize_stream(request: TTSRequest):
-    """流式合成语音"""
+async def synthesize_stream(
+    text: str = None, 
+    voice: Optional[str] = "af_sarah", 
+    lang: Optional[str] = "en-us", 
+    speed: Optional[float] = 1.0,
+    request: Optional[TTSRequest] = None
+):
+    """流式合成语音 (支持 GET 和 POST)"""
     try:
+        # 兼容处理 GET 参数和 POST body
+        if request:
+            text = request.text
+            voice = request.voice
+            lang = request.lang
+            speed = request.speed
+        
+        if not text:
+            raise HTTPException(status_code=400, detail="Text is required")
+
         service = get_service()
         gen = service.synthesize_stream(
-            text=request.text,
-            voice=request.voice,
-            lang=request.lang,
-            speed=request.speed
+            text=text,
+            voice=voice,
+            lang=lang,
+            speed=speed
         )
         return StreamingResponse(gen, media_type="audio/wav")
     except Exception as e:
+        logger.error(f"❌ Api error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     print("=" * 60)

@@ -146,27 +146,48 @@ class TTSService:
     
     def synthesize_stream(self, text: str, voice: str = "af_sarah",
                          lang: str = "en-us", speed: float = 1.0) -> Generator[bytes, None, None]:
-        """流式合成语音"""
+        """流式合成语音 (按句切割，实现首包秒开)"""
+        import re
         try:
-            # 自动选择引擎
+            # 1. 自动选择引擎
             engine = self.auto_select_engine(lang)
+            logger.info(f"📡 [STREAM] Using {engine} for streaming...")
+
+            # 2. 按标点符号切割文本，避免合成过大段落导致的等待
+            # 支持中英文、马来文标点
+            sentences = re.split(r'([。！？.!?;])', text)
+            chunks = []
+            for i in range(0, len(sentences)-1, 2):
+                chunks.append(sentences[i] + sentences[i+1])
+            if len(sentences) % 2 == 1 and sentences[-1].strip():
+                chunks.append(sentences[-1])
             
-            if engine == 'mms':
-                # MMS 目前不支持流式分片，直接返回完整音频流
-                lang_code = lang.split('-')[0] if '-' in lang else lang
-                # 使用临时文件过渡
-                import tempfile
-                with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmp:
-                    self.mms.synthesize(text, language=lang_code, output_path=tmp.name)
-                    with open(tmp.name, "rb") as f:
-                        yield f.read()
-            else:
-                # Kokoro 流式合成
-                for chunk in self.kokoro.synthesize_stream(text, voice, lang, speed):
-                    yield chunk
+            # 如果没切出来（没标点），就用全文
+            if not chunks: chunks = [text]
+
+            for i, chunk in enumerate(chunks):
+                if not chunk.strip(): continue
+                logger.info(f"   ↳ {engine.upper()} Processing chunk {i+1}/{len(chunks)}: {chunk[:20]}...")
+                
+                if engine == 'mms':
+                    lang_code = lang.split('-')[0] if '-' in lang else lang
+                    audio_data = self.mms.synthesize(chunk, language=lang_code)
+                    # 模拟 WAV 块返回 (第一块带头，后续只带数据)
+                    import io
+                    import soundfile as sf
+                    buf = io.BytesIO()
+                    sf.write(buf, audio_data, self.mms.get_sample_rate(lang_code), format='WAV')
+                    yield buf.getvalue()
+                else:
+                    # Kokoro 处理
+                    stream_gen = self.kokoro.synthesize_stream(chunk, voice, lang, speed)
+                    for audio_chunk in stream_gen:
+                        yield audio_chunk
+
         except Exception as e:
             logger.error(f"❌ Stream synthesis failed: {e}")
             raise
+
 
     
     def get_health(self) -> Dict:

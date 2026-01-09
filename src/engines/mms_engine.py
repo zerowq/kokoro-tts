@@ -125,8 +125,12 @@ class MMSEngine:
         inputs = tokenizer(text, return_tensors="pt").to(self.device)
         
         # 推理
+        start_time = time.time()
         with torch.no_grad():
             output = model(**inputs).waveform
+        elapsed = time.time() - start_time
+        logger.info(f"⏱️ [MMS] Synthesis completed in {elapsed:.4f}s")
+
         
         # 提取并转换波形
         waveform = output.squeeze().cpu().numpy()

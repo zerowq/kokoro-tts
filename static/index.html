@@ -210,15 +210,23 @@
             <div class="input-group">
                 <label>选择音色与模型</label>
                 <select id="voiceSelect">
-                    <optgroup label="Kokoro (English)">
-                        <option value="af_sarah" data-lang="en-us">Sarah (Female)</option>
+                    <optgroup label="English 英文 (Kokoro-82M High Quality)">
+                        <option value="af_sarah" data-lang="en-us">Sarah (Female - Default)</option>
+                        <option value="af_gentle" data-lang="en-us">Gentle (Female)</option>
+                        <option value="af_sky" data-lang="en-us">Sky (Female)</option>
+                        <option value="af_bella" data-lang="en-us">Bella (Female)</option>
                         <option value="am_michael" data-lang="en-us">Michael (Male)</option>
+                        <option value="am_adam" data-lang="en-us">Adam (Male)</option>
+                        <option value="bf_isabella" data-lang="en-gb">Isabella (Female-UK)</option>
+                        <option value="bm_george" data-lang="en-gb">George (Male-UK)</option>
                     </optgroup>
-                    <optgroup label="Multi-Language (Automatic)">
-                        <option value="mms" data-lang="ms">Malay 马来文 (Kokoro 自动分流)</option>
-                        <option value="mms_ms" data-lang="ms">Malay 马来文 (MMS 专属模型)</option>
+                    <optgroup label="Multi-Language (MMS)">
+                        <option value="mms_ms" data-lang="ms">Malay 马来文</option>
+                        <option value="mms_zh" data-lang="zh">Chinese 中文 (MMS)</option>
+                        <option value="mms_ja" data-lang="ja">Japanese 日语 (MMS)</option>
                     </optgroup>
                 </select>
+
             </div>
             <div class="input-group">
                 <label>播放语速 / Speed</label>
@@ -305,11 +313,11 @@
         voiceSelect.onchange = () => {
             const selectedOption = voiceSelect.options[voiceSelect.selectedIndex];
             const isMms = voiceSelect.value.startsWith('mms_') || selectedOption.text.includes('MMS');
-            
+
             // MMS 不支持调速，禁用滑块
             speedInput.disabled = isMms;
             speedInput.parentElement.style.opacity = isMms ? "0.4" : "1";
-            
+
             if (selectedOption.getAttribute('data-lang') === 'ms') {
                 textInput.value = "Halo, selamat datang ke perkhidmatan TTS kami. Ini dihasilkan oleh model MMS.";
             } else {

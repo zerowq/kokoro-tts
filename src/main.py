@@ -117,7 +117,22 @@ async def synthesize_stream(
 
 
 if __name__ == "__main__":
-    print("=" * 60)
+    print("\n" + "=" * 60)
     print("🎤 Kokoro TTS Service Starting")
     print("=" * 60)
+    
+    # 🔍 系统环境自检
+    import torch
+    import onnxruntime as ort
+    gpu_available = torch.cuda.is_available()
+    
+    if gpu_available:
+        print(f"🚀 [DEVICE] GPU Detected: {torch.cuda.get_device_name(0)}")
+        print(f"📊 [PYTORCH] Device: CUDA")
+        print(f"📊 [ONNX] Providers: {ort.get_available_providers()}")
+    else:
+        print("💡 [DEVICE] Running on CPU (No GPU found or CUDA not installed)")
+    print("=" * 60 + "\n")
+    
     uvicorn.run(app, host="0.0.0.0", port=8879)
+

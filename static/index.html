@@ -304,12 +304,19 @@
 
         voiceSelect.onchange = () => {
             const selectedOption = voiceSelect.options[voiceSelect.selectedIndex];
+            const isMms = voiceSelect.value.startsWith('mms_') || selectedOption.text.includes('MMS');
+            
+            // MMS 不支持调速，禁用滑块
+            speedInput.disabled = isMms;
+            speedInput.parentElement.style.opacity = isMms ? "0.4" : "1";
+            
             if (selectedOption.getAttribute('data-lang') === 'ms') {
                 textInput.value = "Halo, selamat datang ke perkhidmatan TTS kami. Ini dihasilkan oleh model MMS.";
             } else {
                 textInput.value = "Hello, welcome to Kokoro TTS. This is the fastest synthesis engine on GPU.";
             }
         };
+
     </script>
 </body>
 

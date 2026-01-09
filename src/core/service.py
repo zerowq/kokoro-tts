@@ -186,13 +186,15 @@ class TTSService:
                     source_sr = self.mms.get_sample_rate(lang_code)
                     
                     # 采样率对齐：从 16k (MMS) 转到 24k (Kokoro/Header)
-                    if source_sr != 24000:
+                    if source_sr != 24000 and len(audio_data) > 0:
                         num_samples = int(len(audio_data) * 24000 / source_sr)
                         audio_data = resample(audio_data, num_samples)
                     
                     # 转换为 16bit PCM
-                    pcm_data = (audio_data * 32767).astype(np.int16)
-                    yield pcm_data.tobytes()
+                    if len(audio_data) > 0:
+                        pcm_data = (audio_data * 32767).astype(np.int16)
+                        yield pcm_data.tobytes()
+
                 else:
                     # Kokoro 获取原始数据 (默认 24k)
                     samples, _ = self.kokoro._kokoro.create(chunk, voice=voice, speed=speed, lang=lang)

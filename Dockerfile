@@ -1,27 +1,29 @@
 FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04
 
-# 设置环境变量，强制指定库搜索路径
+# 设置环境变量
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
     LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}"
 
-# 安装系统依赖和完整的 CUDA 12 数学库
+# 安装系统依赖（升级到 Python 3.11）
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 python3-pip python3.10-dev \
+    software-properties-common && \
+    add-apt-repository ppa:deadsnakes/ppa -y && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 python3.11-dev python3.11-distutils \
     libcudnn9-cuda-12 \
     cuda-libraries-12-2 \
     libcublas-12-2 \
-    libcurand-12-2 \
-    libcusolver-12-2 \
-    libcusparse-12-2 \
     ffmpeg libsndfile1 git curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 创建软连接 (使用 -sf 强制覆盖已存在的链接)
-RUN ln -sf /usr/bin/python3.10 /usr/bin/python3 && \
-    ln -sf /usr/bin/python3 /usr/bin/python
+# 获取 pip (python 3.11 需要手动安装 pip)
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
 
+# 创建软连接
+RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3 /usr/bin/python
 
 # 安装 uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
@@ -31,11 +33,13 @@ WORKDIR /app
 # 拷贝依赖定义
 COPY pyproject.toml .
 
-# 安装依赖：使用 CUDA 12 专属优化 build
+# 安装依赖：锁定旧版本的 kokoro-onnx 以确保在 Python 3.11 下的兼容性
+# 并使用 unsafe-best-match 策略让 uv 自动匹配最佳 CUDA 12 的 onnx 运行时
 RUN uv pip install --system \
+    --index-strategy unsafe-best-match \
     --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/ \
     onnxruntime-gpu \
-    kokoro-onnx \
+    "kokoro-onnx<0.4.0" \
     torch \
     transformers \
     scipy \
@@ -44,7 +48,6 @@ RUN uv pip install --system \
     loguru \
     soundfile \
     "numpy<2.0.0"
-
 
 # 拷贝代码
 COPY . .

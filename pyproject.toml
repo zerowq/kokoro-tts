@@ -17,7 +17,7 @@ dependencies = [
     "numpy<2.0.0",
     "scipy>=1.11.0",
     
-    # Kokoro ONNX Runtime
+    # Kokoro ONNX Runtime (轻量级)
     "kokoro-onnx>=0.2.0",
     "onnx>=1.16.0",
     "onnxruntime>=1.18.0; sys_platform == 'darwin' or sys_platform == 'win32'",
@@ -28,6 +28,13 @@ dependencies = [
 ]
 
 [dependency-groups]
+# MMS 引擎可选依赖 (用于马来文等多语言支持)
+mms = [
+    "torch>=2.0.0",
+    "transformers>=4.30.0",
+    "scipy>=1.11.0",
+]
+
 dev = [
     "pytest>=8.0.0",
     "httpx>=0.26.0",

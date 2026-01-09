@@ -17,7 +17,7 @@ from loguru import logger
 GITHUB_RELEASE_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
 MODEL_FILES = {
     "kokoro-v1.0.onnx": f"{GITHUB_RELEASE_URL}/kokoro-v1.0.onnx",
-    "voices.json": f"{GITHUB_RELEASE_URL}/voices.json",
+    "voices-v1.0.bin": f"{GITHUB_RELEASE_URL}/voices-v1.0.bin",
 }
 
 ROOT_DIR = Path(__file__).parent.parent.absolute()

@@ -1,38 +1,44 @@
-FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
+FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04
 
 # 设置环境变量
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    PYTHONPATH=/app
 
 WORKDIR /app
 
-# 安装系统依赖
-RUN apt-get update && apt-get install -y \
-    python3.11 \
+# 1. 安装系统依赖 & 显式安装 cuDNN 9 (保证 ONNX Runtime GPU 核心调用库)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
     python3-pip \
-    python3.11-dev \
+    python3.10-dev \
+    libcudnn9-cuda-12 \
     libsndfile1 \
     curl \
     git \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# 设置 python3.11 为默认 python
-RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
-    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+# 设置 python3.10 为默认 python
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1 \
+    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
 
-# 安装 UV
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.cargo/bin:${PATH}"
+# 2. 安装 UV 提速安装
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# 复制项目文件
+# 3. 复制依赖定义
+COPY pyproject.toml .
+
+# 4. 安装依赖 (预装 MMS 组以支持详细性能测试)
+RUN uv pip install --system -r pyproject.toml && \
+    uv pip install --system torch transformers scipy
+
+# 5. 复制项目文件
 COPY . .
-
-# 使用 UV 同步依赖 (包含 MMS 增强组)
-RUN uv sync --group mms
 
 # 创建必要目录
 RUN mkdir -p models output/benchmark
 
-# 默认运行性能测试
-CMD ["uv", "run", "python", "scripts/benchmark_tts.py", "--kokoro", "both", "--mms", "gpu"]
+# 6. 默认运行性能测试（启用 CUDA 执行模式）
+CMD ["python3", "scripts/benchmark_tts.py", "--kokoro", "both", "--mms", "gpu"]

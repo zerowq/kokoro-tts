@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
     LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}"
 
-# 安装系统依赖（升级到 Python 3.11）
+# 1. 强制安装 Python 3.11 (通过 PPA)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common && \
     add-apt-repository ppa:deadsnakes/ppa -y && \
@@ -18,28 +18,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libsndfile1 git curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 获取 pip (python 3.11 需要手动安装 pip)
+# 2. 强制设为默认 Python
+RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.11 /usr/bin/python
+
+# 3. 安装 pip
 RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
 
-# 创建软连接
-RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 && \
-    ln -sf /usr/bin/python3 /usr/bin/python
-
-# 安装 uv
+# 4. 安装 uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-# 拷贝依赖定义
-COPY pyproject.toml .
-
-# 安装依赖：锁定旧版本的 kokoro-onnx 以确保在 Python 3.11 下的兼容性
-# 并使用 unsafe-best-match 策略让 uv 自动匹配最佳 CUDA 12 的 onnx 运行时
+# 5. 显式锁定依赖 (绕过版本冲突)
+# 这里我们直接指定需要的包，并让 uv 忽略冲突寻找最佳匹配
 RUN uv pip install --system \
     --index-strategy unsafe-best-match \
     --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/ \
     onnxruntime-gpu \
-    "kokoro-onnx<0.4.0" \
+    "kokoro-onnx>=0.1.6,<0.4.0" \
     torch \
     transformers \
     scipy \
@@ -49,7 +46,7 @@ RUN uv pip install --system \
     soundfile \
     "numpy<2.0.0"
 
-# 拷贝代码
+# 6. 拷贝代码
 COPY . .
 
 EXPOSE 8879

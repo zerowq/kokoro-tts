@@ -5,6 +5,8 @@ import uvicorn
 import uuid
 import os
 from pathlib import Path
+ROOT_DIR = Path(__file__).parent.parent.absolute()
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles

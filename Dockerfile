@@ -39,10 +39,13 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uvx /bin/uvx
 WORKDIR /app
 
 # 5. 显式锁定依赖 (绕过版本冲突)
-# 先安装 torch 和 onnxruntime-gpu
+# 先安装 torch
+RUN pip install --no-cache-dir torch==2.1.2
+
+# 安装 onnxruntime-gpu (CUDA 12.x 版本，从微软源)
 RUN pip install --no-cache-dir \
-    torch==2.1.2 \
-    onnxruntime-gpu==1.19.2
+    onnxruntime-gpu==1.17.0 \
+    --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
 
 # 再安装其他依赖
 RUN uv pip install --system \

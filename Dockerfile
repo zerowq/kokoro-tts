@@ -58,10 +58,12 @@ else:
     print('✅ CUDA support detected!')
 PYEOF
 
-# 再安装其他依赖
+# 再安装其他依赖（明确排除onnxruntime避免被覆盖）
 RUN uv pip install --system \
     --index-strategy unsafe-best-match \
-    "kokoro-onnx>=0.1.6,<0.4.0" \
+    --no-deps kokoro-onnx && \
+    uv pip install --system \
+    --index-strategy unsafe-best-match \
     "transformers>=4.35.0,<4.40.0" \
     scipy \
     fastapi \

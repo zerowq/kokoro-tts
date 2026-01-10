@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04
+FROM nvcr.io/nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04
 
 # 设置环境变量
 ENV PYTHONUNBUFFERED=1 \

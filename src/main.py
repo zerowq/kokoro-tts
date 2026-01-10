@@ -121,21 +121,18 @@ if __name__ == "__main__":
     print("🎤 Kokoro TTS Service Starting")
     print("=" * 60)
     
-    # 🔍 系统环境自检
-    import torch
-    import onnxruntime as ort
-    gpu_available = torch.cuda.is_available()
-    
-    if gpu_available:
-        print(f"🚀 [DEVICE] GPU Detected: {torch.cuda.get_device_name(0)}")
-        print(f"📊 [PYTORCH] Device: CUDA")
-        try:
-            import onnxruntime as ort
-            print(f"📊 [ONNX] Providers: {ort.get_available_providers()}")
-        except Exception as e:
-            print(f"⚠️ [ONNX] Could not get providers: {e}")
-    else:
-        print("💡 [DEVICE] Running on CPU (No GPU found or CUDA not installed)")
+    # 🔍 系统环境自检 (仅检查ONNX Runtime，避免torch CUDA初始化问题)
+    try:
+        import onnxruntime as ort
+        providers = ort.get_available_providers()
+        print(f"📊 [ONNX] Available Providers: {providers}")
+        
+        if 'CUDAExecutionProvider' in providers or 'TensorrtExecutionProvider' in providers:
+            print(f"🚀 [DEVICE] GPU acceleration enabled via ONNX Runtime")
+        else:
+            print("💡 [DEVICE] Running on CPU")
+    except Exception as e:
+        print(f"⚠️ [ONNX] Could not get providers: {e}")
 
     print("=" * 60 + "\n")
     

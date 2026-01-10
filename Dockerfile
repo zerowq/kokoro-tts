@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
+FROM nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04
 
 # 设置环境变量
 ENV PYTHONUNBUFFERED=1 \
@@ -34,10 +34,10 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uvx /bin/uvx
 WORKDIR /app
 
 # 5. 显式锁定依赖 (绕过版本冲突)
-# 先安装 torch (CUDA 11.8版本，使用稳定的2.1.0版本)
-RUN pip install --no-cache-dir torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cu118
+# 先安装 torch (CUDA 12.1版本，与CUDA 12.2兼容)
+RUN pip install --no-cache-dir torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cu121
 
-# 安装 onnxruntime-gpu (CUDA 11.8版本)
+# 安装 onnxruntime-gpu (CUDA 12.x版本)
 RUN pip install --no-cache-dir onnxruntime-gpu==1.16.3
 
 # 再安装其他依赖

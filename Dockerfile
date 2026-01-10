@@ -9,10 +9,10 @@ ENV PYTHONUNBUFFERED=1 \
     TZ=UTC
 
 # 1. 强制安装 Python 3.11 (通过 PPA)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN DEBIAN_FRONTEND=noninteractive TZ=UTC apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common && \
     add-apt-repository ppa:deadsnakes/ppa -y && \
-    apt-get update && apt-get install -y --no-install-recommends \
+    apt-get update && DEBIAN_FRONTEND=noninteractive TZ=UTC apt-get install -y --no-install-recommends \
     python3.11 python3.11-dev python3.11-distutils \
     libcudnn9-cuda-12 \
     cuda-libraries-12-2 \

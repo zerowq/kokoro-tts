@@ -17,7 +17,7 @@ RUN DEBIAN_FRONTEND=noninteractive TZ=UTC apt-get update && apt-get install -y -
     add-apt-repository ppa:deadsnakes/ppa -y && \
     apt-get update && DEBIAN_FRONTEND=noninteractive TZ=UTC apt-get install -y --no-install-recommends \
     python3.11 python3.11-dev python3.11-distutils \
-    ffmpeg libsndfile1 git curl \
+    ffmpeg libsndfile1 git curl espeak-ng \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. 强制设为默认 Python
@@ -71,8 +71,8 @@ RUN uv pip install --system \
 
 # 最后安装kokoro-onnx及其依赖（排除onnxruntime和numpy）
 RUN pip install --no-cache-dir \
-    --no-deps kokoro-onnx colorlog espeakng-loader && \
-    pip list | grep -E "kokoro|onnxruntime|numpy" || true
+    --no-deps kokoro-onnx colorlog espeakng-loader phonemizer && \
+    pip list | grep -E "kokoro|onnxruntime|numpy|phonemizer" || true
 
 # 6. 创建输出目录
 RUN mkdir -p /app/output && chmod 777 /app/output

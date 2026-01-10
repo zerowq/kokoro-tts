@@ -26,7 +26,8 @@ RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 && \
 RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
 
 # 4. 安装 uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uvx /bin/uvx
 
 WORKDIR /app
 

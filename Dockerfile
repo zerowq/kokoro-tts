@@ -37,10 +37,19 @@ WORKDIR /app
 # 先安装 torch (CUDA 12.1版本，与CUDA 12.2兼容)
 RUN pip install --no-cache-dir torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cu121
 
-# 安装 onnxruntime-gpu (从Microsoft CUDA 12专用源安装)
-RUN pip install --no-cache-dir \
-    onnxruntime-gpu \
-    --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
+# 安装 onnxruntime-gpu - 尝试多个源直到找到带CUDA支持的版本
+RUN pip install --no-cache-dir onnxruntime-gpu==1.17.0 || \
+    pip install --no-cache-dir onnxruntime-gpu==1.16.3 || \
+    pip install --no-cache-dir onnxruntime-gpu
+
+# 验证CUDA支持（构建时就能检测）
+RUN python3 -c "import onnxruntime as ort; \
+    providers = ort.get_available_providers(); \
+    print('✅ Installed providers:', providers); \
+    if 'CUDAExecutionProvider' not in providers: \
+        print('⚠️  WARNING: CUDAExecutionProvider not found!'); \
+        print('⚠️  This package does not have CUDA support built-in.'); \
+        print('⚠️  Service will run in CPU mode.')"
 
 # 再安装其他依赖
 RUN uv pip install --system \

@@ -124,13 +124,39 @@ if __name__ == "__main__":
     # 🔍 系统环境自检 (仅检查ONNX Runtime，避免torch CUDA初始化问题)
     try:
         import onnxruntime as ort
+        import os
+        
+        print(f"🔍 [DEBUG] ONNX Runtime version: {ort.__version__}")
+        print(f"🔍 [DEBUG] LD_LIBRARY_PATH: {os.environ.get('LD_LIBRARY_PATH', 'Not set')}")
+        print(f"🔍 [DEBUG] CUDA_HOME: {os.environ.get('CUDA_HOME', 'Not set')}")
+        
         providers = ort.get_available_providers()
         print(f"📊 [ONNX] Available Providers: {providers}")
+        
+        # 尝试获取CUDA设备信息
+        try:
+            session_options = ort.SessionOptions()
+            providers_with_options = [
+                ('CUDAExecutionProvider', {
+                    'device_id': 0,
+                    'arena_extend_strategy': 'kNextPowerOfTwo',
+                    'gpu_mem_limit': 2 * 1024 * 1024 * 1024,
+                    'cudnn_conv_algo_search': 'EXHAUSTIVE',
+                    'do_copy_in_default_stream': True,
+                })
+            ]
+            print(f"🔍 [DEBUG] Trying to create CUDA session...")
+        except Exception as e:
+            print(f"⚠️ [DEBUG] CUDA session creation failed: {e}")
         
         if 'CUDAExecutionProvider' in providers or 'TensorrtExecutionProvider' in providers:
             print(f"🚀 [DEVICE] GPU acceleration enabled via ONNX Runtime")
         else:
             print("💡 [DEVICE] Running on CPU")
+            print("⚠️ [HINT] If GPU should be available, check:")
+            print("   - CUDA libraries are in LD_LIBRARY_PATH")
+            print("   - onnxruntime-gpu is built with CUDA support")
+            print("   - Docker container has GPU access (--gpus flag)")
     except Exception as e:
         print(f"⚠️ [ONNX] Could not get providers: {e}")
 

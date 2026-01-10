@@ -22,7 +22,7 @@ class KokoroEngine:
         self.voices_path = voices_path
         self._kokoro = None
         self._loaded = False
-        self._lock = threading.Lock() # 🔒 线程锁
+        self._lock = threading.RLock() # 🔒 可重入锁，防止预热时死锁
         self.sample_rate = 24000
 
     def _load_model(self):

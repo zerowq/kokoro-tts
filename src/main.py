@@ -24,8 +24,8 @@ async def lifespan(app: FastAPI):
     logger.info("🎬 Application starting, pre-loading TTS services...")
     try:
         service = get_service()
-        # 显式触发一次属性访问以调用 _load_model
-        _ = service.kokoro 
+        # 显式触发预加载和预热
+        service.kokoro._load_model()
         logger.info("🌟 All services are ready and warmed up!")
     except Exception as e:
         logger.error(f"💥 Failed to pre-load services: {e}")

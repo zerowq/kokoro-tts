@@ -37,8 +37,10 @@ WORKDIR /app
 # 先安装 torch (CUDA 12.1版本，与CUDA 12.2兼容)
 RUN pip install --no-cache-dir torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cu121
 
-# 安装 onnxruntime-gpu (CUDA 12.x版本)
-RUN pip install --no-cache-dir onnxruntime-gpu==1.16.3
+# 安装 onnxruntime-gpu (从Microsoft CUDA 12专用源安装)
+RUN pip install --no-cache-dir \
+    onnxruntime-gpu \
+    --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
 
 # 再安装其他依赖
 RUN uv pip install --system \

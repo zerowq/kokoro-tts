@@ -91,42 +91,57 @@ class KokoroEngine:
     def synthesize(self, text: str, voice: str = "af_sarah", lang: str = "en-us", 
                    speed: float = 1.0, output_path: Optional[str] = None) -> np.ndarray:
         """
-        合成语音 (非流式)
-        Args:
-            text: 待合成文本
-            voice: 音色名称，例如 'af_sarah', 'am_adam'
-            lang: 语言代码，例如 'en-us', 'en-gb'
-            speed: 语速 (默认 1.0)
-            output_path: 可选，保存音频的路径
-        Returns:
-            np.ndarray: 音频采样数据
+        合成语音 (带文本清洗和并发锁)
         """
         kokoro = self._load_model()
         
-        logger.info(f"🎤 [Kokoro-v1.0] Synthesizing: {text[:50]}...")
+        # 1. 文本深度清洗 (解决极度复杂的字符导致的崩溃)
+        import re
+        
+        # A. 替换已知会引发行号变化的特殊字符
+        text = text.replace('—', '-') 
+        text = text.replace('°', ' degrees ')
+        
+        # B. 移除 Emoji 表情 (Unicode 范围过滤)
+        text = re.sub(r'[\U00010000-\U0010ffff]', '', text)
+        
+        # C. 过滤非法字符：仅保留可打印字符，并移除 Box Drawing 等特殊符号块
+        text = "".join(ch for ch in text if ch.isprintable())
+        
+        # D. 强制单行化，处理空白符
+        text = re.sub(r'[\r\n\t]+', ' ', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        if not text:
+            logger.warning("⚠️ 文本清洗后为空，跳过合成")
+            return np.array([], dtype=np.float32)
+
         start_time = time.time()
         
-        try:
-            # 使用官方 create() 方法
-            samples, sample_rate = kokoro.create(
-                text, voice=voice, speed=speed, lang=lang
-            )
-            self.sample_rate = sample_rate
-            
-            elapsed = time.time() - start_time
-            logger.info(f"⏱️ [Kokoro-v1.0] Synthesis completed in {elapsed:.4f}s")
-            
-            if output_path:
-                import soundfile as sf
-                os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-                sf.write(output_path, samples, sample_rate)
-                logger.info(f"💾 Saved audio to {output_path}")
+        # 2. 线程安全推理 (phonemizer/espeak 在多线程下极不稳定)
+        with self._lock:
+            try:
+                logger.info(f"🎤 [Kokoro-v1.0] Synthesizing: {text[:50]}...")
+                # 使用官方 create() 方法
+                samples, sample_rate = kokoro.create(
+                    text, voice=voice, speed=speed, lang=lang
+                )
+                self.sample_rate = sample_rate
                 
-            return samples
-            
-        except Exception as e:
-            logger.error(f"❌ Kokoro-v1.0 synthesis failed: {e}")
-            raise
+                elapsed = time.time() - start_time
+                logger.info(f"⏱️ [Kokoro-v1.0] Synthesis completed in {elapsed:.4f}s")
+                
+                if output_path:
+                    import soundfile as sf
+                    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+                    sf.write(output_path, samples, sample_rate)
+                    logger.info(f"💾 Saved audio to {output_path}")
+                    
+                return samples
+                
+            except Exception as e:
+                logger.error(f"❌ Kokoro-v1.0 synthesis failed: {e}")
+                raise
 
     def synthesize_stream(self, text: str, voice: str = "af_sarah", lang: str = "en-us",
                           speed: float = 1.0) -> Generator[bytes, None, None]:

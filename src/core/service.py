@@ -158,29 +158,34 @@ class TTSService:
             engine = self.auto_select_engine(lang)
             logger.info(f"📡 [STREAM] Starting pipeline (Engine: {engine})...")
 
-            # 2. 增强型分段：先按标点切，再按长度检查
-            raw_sentences = re.split(r'([。！？.!?;…])', text)
+            # 2. 增强型分段：先按句末标点切
+            # 添加了对问号、叹号、省略号的全面支持
+            raw_sentences = re.split(r'([。！？…!.?])', text)
             raw_chunks = []
             for i in range(0, len(raw_sentences)-1, 2):
                 raw_chunks.append(raw_sentences[i] + raw_sentences[i+1])
             if len(raw_sentences) % 2 == 1 and raw_sentences[-1].strip():
                 raw_chunks.append(raw_sentences[-1])
             
-            # 如果第一段特别长，强行再次切分以保证 TTFB
+            # 3. 再次精细分段：如果单段还是太长 (> 120字符)，按逗号/分号切
             chunks = []
             for chunk in (raw_chunks or [text]):
-                if len(chunk) > 100: # 如果单句超过100字符，强制切分
-                    sub_parts = re.split(r'([,，])', chunk)
+                chunk = chunk.strip()
+                if not chunk: continue
+                
+                if len(chunk) > 120:
+                    sub_parts = re.split(r'([,，;；])', chunk)
                     for j in range(0, len(sub_parts)-1, 2):
                         chunks.append(sub_parts[j] + sub_parts[j+1])
                     if len(sub_parts) % 2 == 1: chunks.append(sub_parts[-1])
                 else:
                     chunks.append(chunk)
             
+            # 彻底清洗每一段
             chunks = [c.strip() for c in chunks if c.strip()]
             if not chunks: return
 
-            # 3. 发送流式 WAV 头部
+            # 4. 发送流式 WAV 头部
             wav_header = struct.pack('<4sI4s4sIHHIIHH4sI',
                 b'RIFF', 0x7FFFFFFF, b'WAVE', b'fmt ', 16, 1, 1,
                 24000, 24000 * 2, 2, 16, b'data', 0x7FFFFFFF)

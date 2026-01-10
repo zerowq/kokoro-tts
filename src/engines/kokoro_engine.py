@@ -136,10 +136,6 @@ class KokoroEngine:
         except Exception as e:
             logger.error(f"❌ Kokoro synthesis failed: {e}")
             raise
-            
-        except Exception as e:
-            logger.error(f"❌ Kokoro-v1.0 synthesis failed: {e}")
-            raise
 
     def synthesize_stream(self, text: str, voice: str = "af_sarah", lang: str = "en-us",
                           speed: float = 1.0) -> Generator[bytes, None, None]:

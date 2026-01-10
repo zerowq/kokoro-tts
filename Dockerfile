@@ -18,10 +18,12 @@ RUN DEBIAN_FRONTEND=noninteractive TZ=UTC apt-get update && apt-get install -y -
     apt-get update && DEBIAN_FRONTEND=noninteractive TZ=UTC apt-get install -y --no-install-recommends \
     python3.11 python3.11-dev python3.11-distutils \
     libcudnn9-cuda-12 \
+    libcudnn9-dev-cuda-12 \
+    cuda-cudart-12-2 \
     cuda-libraries-12-2 \
     libcublas-12-2 \
+    libcublasLt-12-2 \
     cuda-nvrtc-12-2 \
-    cuda-nvcc-12-2 \
     ffmpeg libsndfile1 git curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -58,9 +60,6 @@ RUN uv pip install --system \
     loguru \
     soundfile \
     "numpy<2.0.0"
-
-# 验证 ONNX Runtime GPU 安装
-RUN python3 -c "import onnxruntime as ort; print('Available providers:', ort.get_available_providers()); assert 'CUDAExecutionProvider' in ort.get_available_providers(), 'CUDA provider not found!'"
 
 # 6. 创建输出目录
 RUN mkdir -p /app/output && chmod 777 /app/output

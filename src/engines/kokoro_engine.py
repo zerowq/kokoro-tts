@@ -26,59 +26,57 @@ class KokoroEngine:
         self.sample_rate = 24000
 
     def _load_model(self):
-        with self._lock: # 确保只有一个线程在跑初始化
-    def _load_model(self):
-        if not self._loaded:
-            try:
-                # 📢 显式设置 espeakng 路径
-                import espeakng_loader
-                from phonemizer.backend.espeak.wrapper import EspeakWrapper
-                logger.info(f"📍 Espeak Library: {espeakng_loader.get_library_path()}")
-                EspeakWrapper.set_library(espeakng_loader.get_library_path())
-                EspeakWrapper.set_data_path(espeakng_loader.get_data_path())
-                
-                from kokoro_onnx import Kokoro
-                import onnxruntime as ort
-                start_time = time.time()
-                
-                # 🚀 极致性能 Session 配置
-                sess_options = ort.SessionOptions()
-                sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-                sess_options.add_session_config_entry("session.use_device_allocator_for_initializers", "1")
-                
-                available_providers = ort.get_available_providers()
-                target_providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
-                actual_providers = [p for p in target_providers if p in available_providers]
-
+        with self._lock:  # 确保只有一个线程在跑初始化
+            if not self._loaded:
                 try:
-                    # 我们手动创建 Session 以便注入配置
-                    logger.info(f"🚀 Initializing Kokoro Session with: {actual_providers}")
-                    # 使用 from_session (如果库支持) 或手动初始化并在初始化后注入
-                    self._kokoro = Kokoro(self.model_path, self.voices_path)
+                    # 📢 显式设置 espeakng 路径
+                    import espeakng_loader
+                    from phonemizer.backend.espeak.wrapper import EspeakWrapper
+                    logger.info(f"📍 Espeak Library: {espeakng_loader.get_library_path()}")
+                    EspeakWrapper.set_library(espeakng_loader.get_library_path())
+                    EspeakWrapper.set_data_path(espeakng_loader.get_data_path())
                     
-                    # 💡 强制刷新为优化后的 Session
-                    self._kokoro.sess = ort.InferenceSession(
-                        self.model_path, 
-                        sess_options=sess_options, 
-                        providers=actual_providers
-                    )
+                    from kokoro_onnx import Kokoro
+                    import onnxruntime as ort
+                    start_time = time.time()
+                    
+                    # 🚀 极致性能 Session 配置
+                    sess_options = ort.SessionOptions()
+                    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+                    sess_options.add_session_config_entry("session.use_device_allocator_for_initializers", "1")
+                    
+                    available_providers = ort.get_available_providers()
+                    target_providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+                    actual_providers = [p for p in target_providers if p in available_providers]
+
+                    try:
+                        # 我们手动创建 Session 以便注入配置
+                        logger.info(f"🚀 Initializing Kokoro Session with: {actual_providers}")
+                        self._kokoro = Kokoro(self.model_path, self.voices_path)
+                        
+                        # 💡 强制刷新为优化后的 Session
+                        self._kokoro.sess = ort.InferenceSession(
+                            self.model_path, 
+                            sess_options=sess_options, 
+                            providers=actual_providers
+                        )
+                    except Exception as e:
+                        logger.error(f"❌ Failed to init Kokoro session: {e}")
+                        raise
+
+                    self._loaded = True
+                    logger.info(f"✅ Kokoro-ONNX v1.0 ready in {time.time() - start_time:.4f}s!")
+                    
+                    # 📢 预热
+                    try:
+                        logger.info("🔥 Warming up GPU with complex sentence...")
+                        self.synthesize("Optimization confirmed. The system is operating at maximum efficiency on the Tesla V-100 GPU.")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Warmup failed: {e}")
+
                 except Exception as e:
-                    logger.error(f"❌ Failed to init Kokoro session: {e}")
+                    logger.error(f"❌ Failed to load Kokoro-ONNX: {e}")
                     raise
-
-                self._loaded = True
-                logger.info(f"✅ Kokoro-ONNX v1.0 ready in {time.time() - start_time:.4f}s!")
-                
-                # 📢 预热
-                try:
-                    logger.info("🔥 Warming up GPU with complex sentence...")
-                    self.synthesize("Optimization confirmed. The system is operating at maximum efficiency on the Tesla V-100 GPU.")
-                except Exception as e:
-                    logger.warning(f"⚠️ Warmup failed: {e}")
-
-            except Exception as e:
-                logger.error(f"❌ Failed to load Kokoro-ONNX: {e}")
-                raise
         return self._kokoro
 
     def synthesize(self, text: str, voice: str = "af_sarah", lang: str = "en-us", 

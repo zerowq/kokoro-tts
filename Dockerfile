@@ -90,10 +90,3 @@ CMD ["python3", "-m", "src.main"]
 
 
 
-# docker 命令
-docker run -d \
-  --gpus '"device=1"' \
-  -p 8879:8879 \
-  -v /home/work/evyd/code/speech/kokoro-tts/output:/app/output \
-  --name kokoro-tts-server \
-  kokoro-tts-gpu

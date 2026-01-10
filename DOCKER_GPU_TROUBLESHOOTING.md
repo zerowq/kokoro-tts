@@ -313,3 +313,22 @@ docker logs kokoro-tts-server | grep -E "ONNX Runtime version|Available Provider
 | - | 配置文件路径错误 | ✅ 已解决 |
 | - | EspeakWrapper 属性缺失 | ✅ 已解决 (补丁导入顺序) |
 | 当前 | 最终系统验证 | ⏳ 测试中 |
+
+
+
+
+
+
+# docker 命令
+docker run -d \
+  --gpus '"device=1"' \
+  -p 8879:8879 \
+  -v /home/work/evyd/code/speech/kokoro-tts/output:/app/output \
+  --name kokoro-tts-server \
+  kokoro-tts-gpu
+
+# docker 停止
+docker stop kokoro-tts-server
+
+# docker 删除
+docker rm kokoro-tts-server

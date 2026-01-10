@@ -9,9 +9,11 @@ import os
 import hashlib
 from pathlib import Path
 from typing import Optional, Generator, Dict, List
-import time
+import struct
 import numpy as np
+import concurrent.futures
 from loguru import logger
+from scipy.signal import resample
 
 from ..config import config
 from ..engines.kokoro_engine import KokoroEngine
@@ -29,6 +31,8 @@ class TTSService:
         self._kokoro = None
         self._mms = None
         self._cache = {}
+        # 🚀 全局推理线程池：用于后台并行预取
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
         
     @property
     def kokoro(self) -> KokoroEngine:
@@ -146,65 +150,71 @@ class TTSService:
     
     def synthesize_stream(self, text: str, voice: str = "af_sarah",
                          lang: str = "en-us", speed: float = 1.0) -> Generator[bytes, None, None]:
-        """流式合成语音 (按句切割，实现首包秒开)"""
+        """流式合成语音 (带异步预取流水线，实现极致响应)"""
         import re
+        import time
         try:
             # 1. 自动选择引擎
             engine = self.auto_select_engine(lang)
-            logger.info(f"📡 [STREAM] Using {engine} for streaming...")
+            logger.info(f"📡 [STREAM] Starting pipeline (Engine: {engine})...")
 
-            # 2. 按标点符号切割文本，避免合成过大段落导致的等待
-            # 支持中英文、马来文标点
-            sentences = re.split(r'([。！？.!?;])', text)
-            chunks = []
-            for i in range(0, len(sentences)-1, 2):
-                chunks.append(sentences[i] + sentences[i+1])
-            if len(sentences) % 2 == 1 and sentences[-1].strip():
-                chunks.append(sentences[-1])
+            # 2. 增强型分段：先按标点切，再按长度检查
+            raw_sentences = re.split(r'([。！？.!?;…])', text)
+            raw_chunks = []
+            for i in range(0, len(raw_sentences)-1, 2):
+                raw_chunks.append(raw_sentences[i] + raw_sentences[i+1])
+            if len(raw_sentences) % 2 == 1 and raw_sentences[-1].strip():
+                raw_chunks.append(raw_sentences[-1])
             
-            # 如果没切出来（没标点），就用全文
-            if not chunks: chunks = [text]
+            # 如果第一段特别长，强行再次切分以保证 TTFB
+            chunks = []
+            for chunk in (raw_chunks or [text]):
+                if len(chunk) > 100: # 如果单句超过100字符，强制切分
+                    sub_parts = re.split(r'([,，])', chunk)
+                    for j in range(0, len(sub_parts)-1, 2):
+                        chunks.append(sub_parts[j] + sub_parts[j+1])
+                    if len(sub_parts) % 2 == 1: chunks.append(sub_parts[-1])
+                else:
+                    chunks.append(chunk)
+            
+            chunks = [c.strip() for c in chunks if c.strip()]
+            if not chunks: return
 
-            # 3. 发送流式 WAV 头部 (统一 24000Hz)
-            import struct
-            # 设置数据长度为 0x7FFFFFFF，让浏览器认为是流媒体
+            # 3. 发送流式 WAV 头部
             wav_header = struct.pack('<4sI4s4sIHHIIHH4sI',
                 b'RIFF', 0x7FFFFFFF, b'WAVE', b'fmt ', 16, 1, 1,
                 24000, 24000 * 2, 2, 16, b'data', 0x7FFFFFFF)
             yield wav_header
 
-            from scipy.signal import resample
-            import numpy as np
-
-            for i, chunk in enumerate(chunks):
-                if not chunk.strip(): continue
-                logger.info(f"   ↳ {engine.upper()} Processing chunk {i+1}/{len(chunks)}: {chunk[:20]}...")
-                
+            # 4. 辅助函数：定义单个任务的执行逻辑
+            def task_worker(idx, chunk_text):
+                start_t = time.time()
                 if engine == 'mms':
                     lang_code = lang.split('-')[0] if '-' in lang else lang
-                    audio_data = self.mms.synthesize(chunk, language=lang_code)
+                    audio = self.mms.synthesize(chunk_text, language=lang_code)
                     source_sr = self.mms.get_sample_rate(lang_code)
-                    
-                    # 采样率对齐：从 16k (MMS) 转到 24k (Kokoro/Header)
-                    if source_sr != 24000 and len(audio_data) > 0:
-                        num_samples = int(len(audio_data) * 24000 / source_sr)
-                        audio_data = resample(audio_data, num_samples)
-                    
-                    # 转换为 16bit PCM
-                    if len(audio_data) > 0:
-                        pcm_data = (audio_data * 32767).astype(np.int16)
-                        yield pcm_data.tobytes()
-
+                    if source_sr != 24000 and len(audio) > 0:
+                        num_samples = int(len(audio) * 24000 / source_sr)
+                        audio = resample(audio, num_samples)
                 else:
-                    # Kokoro 获取原始数据 (默认 24k)
-                    samples = self.kokoro.synthesize(chunk, voice=voice, lang=lang, speed=speed)
+                    audio = self.kokoro.synthesize(chunk_text, voice=voice, lang=lang, speed=speed)
+                
+                return idx, audio, time.time() - start_t
+
+            # 5. 提交任务到流水线
+            # 限制初始队列大小，防止短时间挤压过多 GPU 任务
+            futures = [self._executor.submit(task_worker, i, c) for i, c in enumerate(chunks)]
+
+            # 6. 有序产出结果
+            for future in futures:
+                idx, samples, duration = future.result() # 阻塞获取，但后续任务在并行
+                if samples is not None and len(samples) > 0:
+                    logger.debug(f"   ↳ [PIPELINE] Chunk {idx+1}/{len(chunks)} ready ({duration:.3f}s)")
                     pcm_data = (samples * 32767).astype(np.int16)
                     yield pcm_data.tobytes()
 
-
-
         except Exception as e:
-            logger.error(f"❌ Stream synthesis failed: {e}")
+            logger.error(f"❌ Pipeline synthesis failed: {e}")
             raise
 
 

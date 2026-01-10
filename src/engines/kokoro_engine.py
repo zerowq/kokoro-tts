@@ -84,7 +84,17 @@ class KokoroEngine:
 
                 self._loaded = True
                 elapsed = time.time() - start_time
-                logger.info(f"✅ Kokoro-ONNX v1.0 loaded in {elapsed:.4f}s!")
+                logger.info(f"✅ Kokoro-ONNX v1.0 engine files loaded in {elapsed:.4f}s!")
+                
+                # 📢 预热：第一次推理通常较慢，我们在背景提前跑一次
+                try:
+                    logger.info("🔥 Warming up GPU kernels...")
+                    warmup_start = time.time()
+                    # 使用极短文本触发一次真正的推理
+                    self.synthesize("warmup", voice="af_sarah")
+                    logger.info(f"✅ Warmup completed in {time.time() - warmup_start:.4f}s")
+                except Exception as e:
+                    logger.warning(f"⚠️ Warmup failed: {e}")
 
             except Exception as e:
                 logger.error(f"❌ Failed to load Kokoro-ONNX: {e}")

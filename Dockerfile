@@ -34,8 +34,8 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uvx /bin/uvx
 WORKDIR /app
 
 # 5. 显式锁定依赖 (绕过版本冲突)
-# 先安装 torch
-RUN pip install --no-cache-dir torch==2.1.2
+# 先安装 torch (使用更新版本以兼容transformers)
+RUN pip install --no-cache-dir torch==2.4.0 --index-url https://download.pytorch.org/whl/cu121
 
 # 安装 onnxruntime-gpu (CUDA 12.x 版本，从微软源)
 RUN pip install --no-cache-dir \

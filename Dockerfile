@@ -37,6 +37,9 @@ WORKDIR /app
 # 先安装 torch (CUDA 12.1版本，与CUDA 12.2兼容)
 RUN pip install --no-cache-dir torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cu121
 
+# 先降级NumPy以兼容onnxruntime-gpu
+RUN pip install --no-cache-dir "numpy<2.0.0"
+
 # 安装 onnxruntime-gpu - 尝试多个源直到找到带CUDA支持的版本
 RUN pip install --no-cache-dir onnxruntime-gpu==1.17.0 || \
     pip install --no-cache-dir onnxruntime-gpu==1.16.3 || \

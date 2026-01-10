@@ -17,6 +17,7 @@ RUN DEBIAN_FRONTEND=noninteractive TZ=UTC apt-get update && apt-get install -y -
     libcudnn9-cuda-12 \
     cuda-libraries-12-2 \
     libcublas-12-2 \
+    libnvinfer8 libnvinfer-plugin8 libnvonnxparsers8 \
     ffmpeg libsndfile1 git curl \
     && rm -rf /var/lib/apt/lists/*
 

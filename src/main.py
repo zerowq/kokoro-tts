@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
-
+from loguru import logger
 
 from src.config import config
 from src.core.service import get_service

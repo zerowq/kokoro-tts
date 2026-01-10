@@ -50,6 +50,36 @@ RUN uv pip install --system \
 # 6. 拷贝代码
 COPY . .
 
+# 7. 创建输出目录和模型目录
+RUN mkdir -p /app/output /app/models/kokoro && \
+    chmod 777 /app/output
+
+# 8. 下载模型文件 (如果不存在)
+RUN python3 << 'EOF'
+import os
+from pathlib import Path
+
+model_dir = Path("/app/models/kokoro")
+model_dir.mkdir(parents=True, exist_ok=True)
+
+# 检查模型文件是否存在
+model_file = model_dir / "kokoro-v1.0.onnx"
+voices_file = model_dir / "voices.json"
+
+if not model_file.exists() or not voices_file.exists():
+    print("⬇️ Downloading Kokoro models...")
+    try:
+        # 使用 kokoro-onnx 包的下载功能
+        from kokoro_onnx import download_model
+        download_model(str(model_dir))
+        print("✅ Models downloaded successfully")
+    except Exception as e:
+        print(f"⚠️ Could not auto-download models: {e}")
+        print("   Models will be required at runtime")
+else:
+    print("✅ Models already present")
+EOF
+
 EXPOSE 8879
 
 CMD ["python3", "-m", "src.main"]

@@ -27,6 +27,7 @@ class KokoroEngine:
         if not self._loaded:
             try:
                 from kokoro_onnx import Kokoro
+                start_time = time.time()
                 
                 if not os.path.exists(self.model_path):
                     raise FileNotFoundError(f"Model file not found: {self.model_path}")

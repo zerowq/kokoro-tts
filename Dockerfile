@@ -34,8 +34,8 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uvx /bin/uvx
 WORKDIR /app
 
 # 5. 显式锁定依赖 (绕过版本冲突)
-# 先安装 torch (CUDA 11.8版本)
-RUN pip install --no-cache-dir torch==2.4.0 --index-url https://download.pytorch.org/whl/cu118
+# 先安装 torch (CUDA 11.8版本，使用稳定的2.1.0版本)
+RUN pip install --no-cache-dir torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cu118
 
 # 安装 onnxruntime-gpu (CUDA 11.8版本)
 RUN pip install --no-cache-dir onnxruntime-gpu==1.16.3
@@ -44,7 +44,7 @@ RUN pip install --no-cache-dir onnxruntime-gpu==1.16.3
 RUN uv pip install --system \
     --index-strategy unsafe-best-match \
     "kokoro-onnx>=0.1.6,<0.4.0" \
-    transformers \
+    "transformers>=4.35.0,<4.40.0" \
     scipy \
     fastapi \
     uvicorn \

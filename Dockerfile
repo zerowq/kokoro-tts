@@ -58,19 +58,19 @@ else:
     print('✅ CUDA support detected!')
 PYEOF
 
-# 再安装其他依赖（明确排除onnxruntime避免被覆盖）
+# 再安装其他依赖（先安装kokoro-onnx的依赖，但不安装onnxruntime）
 RUN uv pip install --system \
     --index-strategy unsafe-best-match \
-    --no-deps kokoro-onnx && \
-    uv pip install --system \
-    --index-strategy unsafe-best-match \
+    colorlog \
+    phonemizer \
     "transformers>=4.35.0,<4.40.0" \
     scipy \
     fastapi \
     uvicorn \
     loguru \
     soundfile \
-    "numpy<2.0.0"
+    "numpy<2.0.0" && \
+    uv pip install --system --no-deps kokoro-onnx
 
 # 6. 创建输出目录
 RUN mkdir -p /app/output && chmod 777 /app/output

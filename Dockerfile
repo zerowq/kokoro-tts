@@ -39,7 +39,7 @@ WORKDIR /app
 RUN uv pip install --system \
     --index-strategy unsafe-best-match \
     --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/ \
-    onnxruntime-gpu \
+    "onnxruntime-gpu>=1.19.0" \
     "kokoro-onnx>=0.1.6,<0.4.0" \
     torch \
     transformers \

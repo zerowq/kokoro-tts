@@ -71,8 +71,8 @@ RUN uv pip install --system \
 
 # 最后安装kokoro-onnx及其依赖（排除onnxruntime和numpy）
 RUN pip install --no-cache-dir \
-    --no-deps kokoro-onnx colorlog espeakng-loader phonemizer && \
-    pip list | grep -E "kokoro|onnxruntime|numpy|phonemizer" || true
+    --no-deps kokoro-onnx colorlog espeakng-loader phonemizer joblib && \
+    pip list | grep -E "kokoro|onnxruntime|numpy|phonemizer|joblib" || true
 
 # 6. 创建输出目录
 RUN mkdir -p /app/output && chmod 777 /app/output

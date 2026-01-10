@@ -58,19 +58,20 @@ else:
     print('✅ CUDA support detected!')
 PYEOF
 
-# 再安装其他依赖（先安装kokoro-onnx的依赖，但不安装onnxruntime）
+# 安装其他依赖
 RUN uv pip install --system \
     --index-strategy unsafe-best-match \
-    colorlog \
-    phonemizer \
     "transformers>=4.35.0,<4.40.0" \
     scipy \
     fastapi \
     uvicorn \
     loguru \
     soundfile \
-    "numpy<2.0.0" && \
-    uv pip install --system --no-deps kokoro-onnx
+    "numpy<2.0.0"
+
+# 最后安装kokoro-onnx（带所有依赖，但排除onnxruntime）
+RUN pip install --no-cache-dir kokoro-onnx --no-deps && \
+    pip install --no-cache-dir colorlog phonemizer espeakng-loader gruut-ipa num2words
 
 # 6. 创建输出目录
 RUN mkdir -p /app/output && chmod 777 /app/output

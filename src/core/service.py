@@ -197,7 +197,7 @@ class TTSService:
 
                 else:
                     # Kokoro 获取原始数据 (默认 24k)
-                    samples, _ = self.kokoro._kokoro.create(chunk, voice=voice, speed=speed, lang=lang)
+                    samples = self.kokoro.synthesize(chunk, voice=voice, lang=lang, speed=speed)
                     pcm_data = (samples * 32767).astype(np.int16)
                     yield pcm_data.tobytes()
 

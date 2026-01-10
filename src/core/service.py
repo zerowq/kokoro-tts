@@ -191,31 +191,25 @@ class TTSService:
                 24000, 24000 * 2, 2, 16, b'data', 0x7FFFFFFF)
             yield wav_header
 
-            # 4. 辅助函数：定义单个任务的执行逻辑
-            def task_worker(idx, chunk_text):
+            # 4. 发送流式数据 (回归串行，利用 GPU 极速推理实现首包秒开)
+            for i, chunk in enumerate(chunks):
+                if not chunk.strip(): continue
+                
                 start_t = time.time()
                 if engine == 'mms':
                     lang_code = lang.split('-')[0] if '-' in lang else lang
-                    audio = self.mms.synthesize(chunk_text, language=lang_code)
+                    audio = self.mms.synthesize(chunk, language=lang_code)
                     source_sr = self.mms.get_sample_rate(lang_code)
                     if source_sr != 24000 and len(audio) > 0:
                         num_samples = int(len(audio) * 24000 / source_sr)
                         audio = resample(audio, num_samples)
                 else:
-                    audio = self.kokoro.synthesize(chunk_text, voice=voice, lang=lang, speed=speed)
+                    audio = self.kokoro.synthesize(chunk, voice=voice, lang=lang, speed=speed)
                 
-                return idx, audio, time.time() - start_t
-
-            # 5. 提交任务到流水线
-            # 限制初始队列大小，防止短时间挤压过多 GPU 任务
-            futures = [self._executor.submit(task_worker, i, c) for i, c in enumerate(chunks)]
-
-            # 6. 有序产出结果
-            for future in futures:
-                idx, samples, duration = future.result() # 阻塞获取，但后续任务在并行
-                if samples is not None and len(samples) > 0:
-                    logger.debug(f"   ↳ [PIPELINE] Chunk {idx+1}/{len(chunks)} ready ({duration:.3f}s)")
-                    pcm_data = (samples * 32767).astype(np.int16)
+                if audio is not None and len(audio) > 0:
+                    duration = time.time() - start_t
+                    logger.debug(f"   ↳ [STREAM] Chunk {i+1}/{len(chunks)} ready in {duration:.3f}s")
+                    pcm_data = (audio * 32767).astype(np.int16)
                     yield pcm_data.tobytes()
 
         except Exception as e:

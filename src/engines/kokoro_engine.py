@@ -119,23 +119,20 @@ class KokoroEngine:
         start_time = time.time()
         
         try:
-            # 1. 文本转换音素 (串行加锁，保证 espeak-ng 稳定)
-            # phonemizer/espeak 不支持并发，这部分计算量极小，串行化无感知
+            # 1. 预提取音色向量，加速推理接口调用
+            voice_style = voice
+            if isinstance(voice, str):
+                voice_style = kokoro.get_voice_style(voice)
+
+            # 2. 回归官方最优路径：直接传入文本
             with self._lock:
-                phonemes = kokoro.tokenizer.phonemize(text, lang=lang)
-            
-            # 2. GPU 并发推理 (ONNX Runtime 线程安全)
-            # 拿到音素后立即放锁，让 GPU 能够同时处理多个并发推理请求
-            infer_start = time.time()
-            logger.info(f"🎤 [Kokoro-v1.0] GPU Inferencing: {text[:50]}...")
-            samples, sample_rate = kokoro.create(
-                phonemes, voice=voice, speed=speed, lang=lang, is_phonemes=True
-            )
+                samples, sample_rate = kokoro.create(
+                    text, voice=voice_style, speed=speed, lang=lang, trim=False
+                )
             
             self.sample_rate = sample_rate
             elapsed = time.time() - start_time
-            infer_only = time.time() - infer_start
-            logger.info(f"⏱️ [Kokoro-v1.0] Completed in {elapsed:.3f}s (Inference: {infer_only:.3f}s)")
+            logger.info(f"⏱️ [Kokoro-v1.0] Done in {elapsed:.3f}s")
             
             if output_path:
                 import soundfile as sf

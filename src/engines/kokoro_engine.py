@@ -26,6 +26,14 @@ class KokoroEngine:
     def _load_model(self):
         if not self._loaded:
             try:
+                # 📢 重要：espeakng_loader 必须在 phonemizer/kokoro_onnx 之前导入
+                # 它会向 phonemizer 的 EspeakWrapper 注入 set_data_path 方法
+                try:
+                    import espeakng_loader
+                    logger.info("✅ espeakng_loader initialized")
+                except ImportError:
+                    logger.warning("⚠️ espeakng_loader not found, this may cause issues on some systems")
+                
                 from kokoro_onnx import Kokoro
                 start_time = time.time()
                 

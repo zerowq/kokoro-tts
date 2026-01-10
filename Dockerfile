@@ -68,8 +68,8 @@ RUN uv pip install --system \
     "numpy<2.0.0"
 
 # 最后安装依赖
-# 1. 正常安装 phonemizer 及其依赖 (它不包含 onnxruntime/numpy 冲突)
-RUN pip install --no-cache-dir phonemizer colorlog espeakng-loader
+# 1. 正常安装 phonemizer-fork 及其依赖 (它不包含 onnxruntime/numpy 冲突)
+RUN pip install --no-cache-dir phonemizer-fork colorlog espeakng-loader
 
 # 2. 仅对 kokoro-onnx 使用 --no-deps (为了保护已安装的 onnxruntime-gpu 和 numpy<2.0)
 RUN pip install --no-cache-dir --no-deps kokoro-onnx

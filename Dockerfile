@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04
+FROM nvcr.io/nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
 # 设置环境变量
 ENV PYTHONUNBUFFERED=1 \
@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
     CUDA_HOME=/usr/local/cuda \
     CUDA_PATH=/usr/local/cuda \
-    LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/local/cuda/compat:/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}" \
+    LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}" \
     PATH="/usr/local/cuda/bin:${PATH}" \
     DEBIAN_FRONTEND=noninteractive \
     TZ=UTC
@@ -37,13 +37,11 @@ WORKDIR /app
 # 先降级NumPy以兼容onnxruntime-gpu
 RUN pip install --no-cache-dir "numpy<2.0.0"
 
-# 先安装 torch (CUDA 12.1版本)
-RUN pip install --no-cache-dir torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cu121
+# 先安装 torch (CUDA 11.8版本)
+RUN pip install --no-cache-dir torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cu118
 
-# 安装 onnxruntime-gpu (尝试CUDA 12专用版本，从Microsoft源)
-RUN pip install --no-cache-dir onnxruntime-gpu==1.18.0 \
-    --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/ || \
-    pip install --no-cache-dir onnxruntime-gpu==1.17.0
+# 安装 onnxruntime-gpu (1.17.1 对 CUDA 11.8 非常稳定)
+RUN pip install --no-cache-dir onnxruntime-gpu==1.17.1
 
 # 验证CUDA支持（构建时就能检测）
 RUN python3 << 'PYEOF'

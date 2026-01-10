@@ -39,16 +39,15 @@ class KokoroEngine:
                 available_providers = ort.get_available_providers()
                 logger.info(f"🔍 System Available ONNX Providers: {available_providers}")
                 
-                # 显式指定 Provider 顺序，确保 CUDA 在最前面
+                # 显式指定 Provider 顺序，舍弃不稳定的 TensorRT，锁定 CUDA
                 target_providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
-                if 'TensorrtExecutionProvider' in available_providers:
-                    target_providers.insert(0, 'TensorrtExecutionProvider')
                 
                 # 🐒 猴子补丁：强制劫持 InferenceSession 的创建行为
                 original_session = ort.InferenceSession
                 def forced_gpu_session(path_or_bytes, sess_options=None, providers=None, **kwargs):
                     # 无论内部库怎么传，我们强制覆盖为 GPU 优先
-                    return original_session(path_or_bytes, sess_options=sess_options, providers=target_providers, **kwargs)
+                    actual_providers = [p for p in target_providers if p in available_providers]
+                    return original_session(path_or_bytes, sess_options=sess_options, providers=actual_providers, **kwargs)
                 
                 import json
                 original_load = np.load

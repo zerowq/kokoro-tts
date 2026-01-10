@@ -27,112 +27,104 @@ class KokoroEngine:
 
     def _load_model(self):
         with self._lock: # 确保只有一个线程在跑初始化
-            if not self._loaded:
+    def _load_model(self):
+        if not self._loaded:
+            try:
+                # 📢 显式设置 espeakng 路径
+                import espeakng_loader
+                from phonemizer.backend.espeak.wrapper import EspeakWrapper
+                logger.info(f"📍 Espeak Library: {espeakng_loader.get_library_path()}")
+                EspeakWrapper.set_library(espeakng_loader.get_library_path())
+                EspeakWrapper.set_data_path(espeakng_loader.get_data_path())
+                
+                from kokoro_onnx import Kokoro
+                import onnxruntime as ort
+                start_time = time.time()
+                
+                # 🚀 极致性能 Session 配置
+                sess_options = ort.SessionOptions()
+                sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+                sess_options.add_session_config_entry("session.use_device_allocator_for_initializers", "1")
+                
+                available_providers = ort.get_available_providers()
+                target_providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+                actual_providers = [p for p in target_providers if p in available_providers]
+
                 try:
-                    # 📢 重要：espeakng_loader 必须在 phonemizer/kokoro_onnx 之前导入
-                    try:
-                        import espeakng_loader
-                        logger.info("✅ espeakng_loader initialized")
-                    except ImportError:
-                        logger.warning("⚠️ espeakng_loader not found")
+                    # 我们手动创建 Session 以便注入配置
+                    logger.info(f"🚀 Initializing Kokoro Session with: {actual_providers}")
+                    # 使用 from_session (如果库支持) 或手动初始化并在初始化后注入
+                    self._kokoro = Kokoro(self.model_path, self.voices_path)
                     
-                    from kokoro_onnx import Kokoro
-                    start_time = time.time()
-                    
-                    if not os.path.exists(self.model_path):
-                        raise FileNotFoundError(f"Model file not found: {self.model_path}")
-
-                    # 📢 强制开启 GPU 调度
-                    import onnxruntime as ort
-                    available_providers = ort.get_available_providers()
-                    target_providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
-                    
-                    original_session = ort.InferenceSession
-                    def forced_gpu_session(path_or_bytes, sess_options=None, providers=None, **kwargs):
-                        actual_providers = [p for p in target_providers if p in available_providers]
-                        return original_session(path_or_bytes, sess_options=sess_options, providers=actual_providers, **kwargs)
-                    
-                    import json
-                    original_load = np.load
-                    original_json_load = json.load
-                    
-                    # 注入补丁 (修复了 allow_pickle 重复传参的问题)
-                    def safe_np_load(*args, **kwargs):
-                        kwargs['allow_pickle'] = True
-                        return original_load(*args, **kwargs)
-
-                    ort.InferenceSession = forced_gpu_session
-                    np.load = safe_np_load
-                    json.load = lambda f, **k: original_json_load(f, **k)
-                    
-                    try:
-                        logger.info(f"🚀 Initializing Kokoro with GPU Providers: {target_providers}")
-                        self._kokoro = Kokoro(self.model_path, self.voices_path)
-                    finally:
-                        ort.InferenceSession = original_session
-                        np.load = original_load
-                        json.load = original_json_load
-
-                    self._loaded = True
-                    logger.info(f"✅ Kokoro-ONNX v1.0 ready in {time.time() - start_time:.4f}s!")
-                    
-                    # 📢 预热
-                    try:
-                        logger.info("🔥 Warming up GPU kernels with a real sentence...")
-                        self.synthesize("Initializing the Kokoro TTS engine for high performance speech synthesis.", voice="af_sarah")
-                    except Exception as e:
-                        logger.warning(f"⚠️ Warmup failed: {e}")
-
+                    # 💡 强制刷新为优化后的 Session
+                    self._kokoro.sess = ort.InferenceSession(
+                        self.model_path, 
+                        sess_options=sess_options, 
+                        providers=actual_providers
+                    )
                 except Exception as e:
-                    logger.error(f"❌ Failed to load Kokoro-ONNX: {e}")
+                    logger.error(f"❌ Failed to init Kokoro session: {e}")
                     raise
+
+                self._loaded = True
+                logger.info(f"✅ Kokoro-ONNX v1.0 ready in {time.time() - start_time:.4f}s!")
+                
+                # 📢 预热
+                try:
+                    logger.info("🔥 Warming up GPU with complex sentence...")
+                    self.synthesize("Optimization confirmed. The system is operating at maximum efficiency on the Tesla V-100 GPU.")
+                except Exception as e:
+                    logger.warning(f"⚠️ Warmup failed: {e}")
+
+            except Exception as e:
+                logger.error(f"❌ Failed to load Kokoro-ONNX: {e}")
+                raise
         return self._kokoro
 
     def synthesize(self, text: str, voice: str = "af_sarah", lang: str = "en-us", 
                    speed: float = 1.0, output_path: Optional[str] = None) -> np.ndarray:
         """
-        合成语音 (带文本清洗和并发锁)
+        合成语音 (带精细计时和优化路径)
         """
         kokoro = self._load_model()
         
-        # 1. 文本深度清洗 (解决极度复杂的字符导致的崩溃)
+        # 文本深度清洗
         import re
-        
-        # A. 替换已知会引发行号变化的特殊字符
-        text = text.replace('—', '-') 
-        text = text.replace('°', ' degrees ')
-        
-        # B. 移除 Emoji 表情 (Unicode 范围过滤)
+        text = text.replace('—', '-').replace('°', ' degrees ')
         text = re.sub(r'[\U00010000-\U0010ffff]', '', text)
-        
-        # C. 过滤非法字符：仅保留可打印字符，并移除 Box Drawing 等特殊符号块
         text = "".join(ch for ch in text if ch.isprintable())
-        
-        # D. 强制单行化，处理空白符
         text = re.sub(r'[\r\n\t]+', ' ', text)
         text = re.sub(r'\s+', ' ', text).strip()
         
         if not text:
-            logger.warning("⚠️ 文本清洗后为空，跳过合成")
             return np.array([], dtype=np.float32)
 
         start_time = time.time()
         
         try:
-            # 1. 预提取音色向量，加速推理接口调用
-            voice_style = voice
-            if isinstance(voice, str):
-                voice_style = kokoro.get_voice_style(voice)
-
-            # 2. 回归官方最优路径：直接传入文本
+            # 1. 音素转换阶段 (CPU)
+            pho_start = time.time()
             with self._lock:
+                voice_style = voice
+                if isinstance(voice, str):
+                    voice_style = kokoro.get_voice_style(voice)
+                # 提取音素
+                phonemes = kokoro.tokenizer.phonemize(text, lang=lang)
+            pho_duration = time.time() - pho_start
+
+            # 2. 推理阶段 (GPU) - 已由 RLock 保证单引擎安全
+            infer_start = time.time()
+            with self._lock:
+                # 使用 is_phonemes=True 跳过内部转换，trim=False 维持极速
                 samples, sample_rate = kokoro.create(
-                    text, voice=voice_style, speed=speed, lang=lang, trim=False
+                    phonemes, voice=voice_style, speed=speed, lang=lang, 
+                    is_phonemes=True, trim=False
                 )
+            infer_duration = time.time() - infer_start
             
             self.sample_rate = sample_rate
-            elapsed = time.time() - start_time
-            logger.info(f"⏱️ [Kokoro-v1.0] Done in {elapsed:.3f}s")
+            total_duration = time.time() - start_time
+            logger.info(f"⏱️ [Kokoro] Total: {total_duration:.3f}s | Phonemes: {pho_duration:.3f}s | Infer: {infer_duration:.3f}s")
             
             if output_path:
                 import soundfile as sf
@@ -140,6 +132,10 @@ class KokoroEngine:
                 sf.write(output_path, samples, sample_rate)
                 
             return samples
+            
+        except Exception as e:
+            logger.error(f"❌ Kokoro synthesis failed: {e}")
+            raise
             
         except Exception as e:
             logger.error(f"❌ Kokoro-v1.0 synthesis failed: {e}")

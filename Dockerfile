@@ -69,10 +69,16 @@ RUN uv pip install --system \
     soundfile \
     "numpy<2.0.0"
 
-# 最后安装kokoro-onnx及其依赖（排除onnxruntime和numpy）
-RUN pip install --no-cache-dir \
-    --no-deps kokoro-onnx colorlog espeakng-loader phonemizer joblib && \
-    pip list | grep -E "kokoro|onnxruntime|numpy|phonemizer|joblib" || true
+# 最后安装依赖
+# 1. 正常安装 phonemizer 及其依赖 (它不包含 onnxruntime/numpy 冲突)
+RUN pip install --no-cache-dir phonemizer colorlog espeakng-loader
+
+# 2. 仅对 kokoro-onnx 使用 --no-deps (为了保护已安装的 onnxruntime-gpu 和 numpy<2.0)
+RUN pip install --no-cache-dir --no-deps kokoro-onnx
+
+# 3. 验证所有核心组件是否到位
+RUN python3 -c "import phonemizer; import joblib; import dlinfo; print('✅ Backend dependencies verified')" && \
+    pip list | grep -E "kokoro|onnxruntime|numpy|phonemizer|joblib|dlinfo" || true
 
 # 6. 创建输出目录
 RUN mkdir -p /app/output && chmod 777 /app/output

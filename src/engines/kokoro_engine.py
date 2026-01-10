@@ -118,26 +118,21 @@ class KokoroEngine:
 
         start_time = time.time()
         
+        start_time = time.time()
+        
         try:
-            # 2. 线程安全地转换音素 (phonemizer/espeak 不支持并发)
+            # 由于 phonemizer/espeak 不支持并发且库未暴露分拆接口，
+            # 我们在整个推理过程加锁以保证 100% 稳定性。
+            # V100 GPU 处理单段 (0.3s) 极快，串行化推理足以支撑流式体验。
             with self._lock:
-                # logger.debug(f"🎤 [Kokoro-v1.0] Processing phonemes for: {text[:30]}...")
-                # 预提取音素 (此处假定 kokoro_onnx 内部实现)
-                # 为保证 100% 兼容性，我们通过内部接口手动分拆或保留最小化锁范围
-                # 由于无法直接修改库，我们保持在锁内仅进行 phonemized 生产
-                phonemes = kokoro.tokenizer.phonemize(text, lang)
+                logger.info(f"🎤 [Kokoro-v1.0] Synthesizing: {text[:50]}...")
+                samples, sample_rate = kokoro.create(
+                    text, voice=voice, speed=speed, lang=lang
+                )
             
-            # 3. 并发 GPU 推理 (ONNX Runtime 是线程安全的)
-            # 拿到音素后立即放锁，让其他线程也能进来处理音素，GPU 侧实现并行
-            infer_start = time.time()
-            samples, sample_rate = kokoro.create_from_phonemes(
-                phonemes, voice=voice, speed=speed
-            )
             self.sample_rate = sample_rate
-            
             elapsed = time.time() - start_time
-            infer_only = time.time() - infer_start
-            logger.info(f"⏱️ [Kokoro-v1.0] Completed. (Total: {elapsed:.3f}s | Infer: {infer_only:.3f}s)")
+            logger.info(f"⏱️ [Kokoro-v1.0] Completed in {elapsed:.3f}s")
             
             if output_path:
                 import soundfile as sf

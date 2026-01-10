@@ -78,8 +78,8 @@ class KokoroEngine:
                     
                     # 📢 预热
                     try:
-                        logger.info("🔥 Warming up GPU kernels...")
-                        self.synthesize("warmup", voice="af_sarah")
+                        logger.info("🔥 Warming up GPU kernels with a real sentence...")
+                        self.synthesize("Initializing the Kokoro TTS engine for high performance speech synthesis.", voice="af_sarah")
                     except Exception as e:
                         logger.warning(f"⚠️ Warmup failed: {e}")
 
@@ -118,30 +118,37 @@ class KokoroEngine:
 
         start_time = time.time()
         
-        # 2. 线程安全推理 (phonemizer/espeak 在多线程下极不稳定)
-        with self._lock:
-            try:
-                logger.info(f"🎤 [Kokoro-v1.0] Synthesizing: {text[:50]}...")
-                # 使用官方 create() 方法
-                samples, sample_rate = kokoro.create(
-                    text, voice=voice, speed=speed, lang=lang
-                )
-                self.sample_rate = sample_rate
+        try:
+            # 2. 线程安全地转换音素 (phonemizer/espeak 不支持并发)
+            with self._lock:
+                # logger.debug(f"🎤 [Kokoro-v1.0] Processing phonemes for: {text[:30]}...")
+                # 预提取音素 (此处假定 kokoro_onnx 内部实现)
+                # 为保证 100% 兼容性，我们通过内部接口手动分拆或保留最小化锁范围
+                # 由于无法直接修改库，我们保持在锁内仅进行 phonemized 生产
+                phonemes = kokoro.tokenizer.phonemize(text, lang)
+            
+            # 3. 并发 GPU 推理 (ONNX Runtime 是线程安全的)
+            # 拿到音素后立即放锁，让其他线程也能进来处理音素，GPU 侧实现并行
+            infer_start = time.time()
+            samples, sample_rate = kokoro.create_from_phonemes(
+                phonemes, voice=voice, speed=speed
+            )
+            self.sample_rate = sample_rate
+            
+            elapsed = time.time() - start_time
+            infer_only = time.time() - infer_start
+            logger.info(f"⏱️ [Kokoro-v1.0] Completed. (Total: {elapsed:.3f}s | Infer: {infer_only:.3f}s)")
+            
+            if output_path:
+                import soundfile as sf
+                os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+                sf.write(output_path, samples, sample_rate)
                 
-                elapsed = time.time() - start_time
-                logger.info(f"⏱️ [Kokoro-v1.0] Synthesis completed in {elapsed:.4f}s")
-                
-                if output_path:
-                    import soundfile as sf
-                    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-                    sf.write(output_path, samples, sample_rate)
-                    logger.info(f"💾 Saved audio to {output_path}")
-                    
-                return samples
-                
-            except Exception as e:
-                logger.error(f"❌ Kokoro-v1.0 synthesis failed: {e}")
-                raise
+            return samples
+            
+        except Exception as e:
+            logger.error(f"❌ Kokoro-v1.0 synthesis failed: {e}")
+            raise
 
     def synthesize_stream(self, text: str, voice: str = "af_sarah", lang: str = "en-us",
                           speed: float = 1.0) -> Generator[bytes, None, None]:

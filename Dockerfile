@@ -43,13 +43,17 @@ RUN pip install --no-cache-dir onnxruntime-gpu==1.17.0 || \
     pip install --no-cache-dir onnxruntime-gpu
 
 # 验证CUDA支持（构建时就能检测）
-RUN python3 -c "import onnxruntime as ort; \
-    providers = ort.get_available_providers(); \
-    print('✅ Installed providers:', providers); \
-    if 'CUDAExecutionProvider' not in providers: \
-        print('⚠️  WARNING: CUDAExecutionProvider not found!'); \
-        print('⚠️  This package does not have CUDA support built-in.'); \
-        print('⚠️  Service will run in CPU mode.')"
+RUN python3 << 'PYEOF'
+import onnxruntime as ort
+providers = ort.get_available_providers()
+print('✅ Installed providers:', providers)
+if 'CUDAExecutionProvider' not in providers:
+    print('⚠️  WARNING: CUDAExecutionProvider not found!')
+    print('⚠️  This package does not have CUDA support built-in.')
+    print('⚠️  Service will run in CPU mode.')
+else:
+    print('✅ CUDA support detected!')
+PYEOF
 
 # 再安装其他依赖
 RUN uv pip install --system \

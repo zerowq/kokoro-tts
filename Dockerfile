@@ -34,16 +34,16 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uvx /bin/uvx
 WORKDIR /app
 
 # 5. 显式锁定依赖 (绕过版本冲突)
-# 先安装 torch (CUDA 12.1版本，与CUDA 12.2兼容)
-RUN pip install --no-cache-dir torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cu121
-
 # 先降级NumPy以兼容onnxruntime-gpu
 RUN pip install --no-cache-dir "numpy<2.0.0"
 
-# 安装 onnxruntime-gpu - 尝试多个源直到找到带CUDA支持的版本
-RUN pip install --no-cache-dir onnxruntime-gpu==1.17.0 || \
-    pip install --no-cache-dir onnxruntime-gpu==1.16.3 || \
-    pip install --no-cache-dir onnxruntime-gpu
+# 先安装 torch (CUDA 12.1版本)
+RUN pip install --no-cache-dir torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cu121
+
+# 安装 onnxruntime-gpu (尝试CUDA 12专用版本，从Microsoft源)
+RUN pip install --no-cache-dir onnxruntime-gpu==1.18.0 \
+    --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/ || \
+    pip install --no-cache-dir onnxruntime-gpu==1.17.0
 
 # 验证CUDA支持（构建时就能检测）
 RUN python3 << 'PYEOF'
@@ -69,9 +69,10 @@ RUN uv pip install --system \
     soundfile \
     "numpy<2.0.0"
 
-# 最后安装kokoro-onnx（带所有依赖，但排除onnxruntime）
-RUN pip install --no-cache-dir kokoro-onnx --no-deps && \
-    pip install --no-cache-dir colorlog phonemizer espeakng-loader gruut-ipa num2words
+# 最后安装kokoro-onnx及其依赖（排除onnxruntime和numpy）
+RUN pip install --no-cache-dir \
+    --no-deps kokoro-onnx colorlog espeakng-loader && \
+    pip list | grep -E "kokoro|onnxruntime|numpy" || true
 
 # 6. 创建输出目录
 RUN mkdir -p /app/output && chmod 777 /app/output

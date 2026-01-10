@@ -4,7 +4,9 @@ FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
-    LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}"
+    LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}" \
+    DEBIAN_FRONTEND=noninteractive \
+    TZ=UTC
 
 # 1. 强制安装 Python 3.11 (通过 PPA)
 RUN apt-get update && apt-get install -y --no-install-recommends \

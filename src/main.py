@@ -13,14 +13,30 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
 from loguru import logger
+from contextlib import asynccontextmanager
 
 from src.config import config
 from src.core.service import get_service
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 🚀 启动时加载：这将触发模型加载和 GPU 预热
+    logger.info("🎬 Application starting, pre-loading TTS services...")
+    try:
+        service = get_service()
+        # 显式触发一次属性访问以调用 _load_model
+        _ = service.kokoro 
+        logger.info("🌟 All services are ready and warmed up!")
+    except Exception as e:
+        logger.error(f"💥 Failed to pre-load services: {e}")
+    yield
+    logger.info("🛑 Application shutting down...")
+
 app = FastAPI(
     title="Kokoro TTS API",
     description="Lightweight Kokoro-82M TTS Service",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan
 )
 
 class TTSRequest(BaseModel):

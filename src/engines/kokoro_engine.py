@@ -5,6 +5,7 @@ Kokoro-82M TTS 引擎封装 (v1.0 ONNX 高性能版)
 import os
 import time
 import numpy as np
+import threading
 from typing import Optional, Generator
 from loguru import logger
 
@@ -21,84 +22,70 @@ class KokoroEngine:
         self.voices_path = voices_path
         self._kokoro = None
         self._loaded = False
+        self._lock = threading.Lock() # 🔒 线程锁
         self.sample_rate = 24000
 
     def _load_model(self):
-        if not self._loaded:
-            try:
-                # 📢 重要：espeakng_loader 必须在 phonemizer/kokoro_onnx 之前导入
-                # 它会向 phonemizer 的 EspeakWrapper 注入 set_data_path 方法
+        with self._lock: # 确保只有一个线程在跑初始化
+            if not self._loaded:
                 try:
-                    import espeakng_loader
-                    logger.info("✅ espeakng_loader initialized")
-                except ImportError:
-                    logger.warning("⚠️ espeakng_loader not found, this may cause issues on some systems")
-                
-                from kokoro_onnx import Kokoro
-                start_time = time.time()
-                
-                if not os.path.exists(self.model_path):
-                    raise FileNotFoundError(f"Model file not found: {self.model_path}")
-                if not os.path.exists(self.voices_path):
-                    raise FileNotFoundError(f"Voices file not found: {self.voices_path}")
+                    # 📢 重要：espeakng_loader 必须在 phonemizer/kokoro_onnx 之前导入
+                    try:
+                        import espeakng_loader
+                        logger.info("✅ espeakng_loader initialized")
+                    except ImportError:
+                        logger.warning("⚠️ espeakng_loader not found")
+                    
+                    from kokoro_onnx import Kokoro
+                    start_time = time.time()
+                    
+                    if not os.path.exists(self.model_path):
+                        raise FileNotFoundError(f"Model file not found: {self.model_path}")
 
-                # 📢 强制开启 GPU 调度 (补丁级别)
-                import onnxruntime as ort
-                available_providers = ort.get_available_providers()
-                logger.info(f"🔍 System Available ONNX Providers: {available_providers}")
-                
-                # 显式指定 Provider 顺序，舍弃不稳定的 TensorRT，锁定 CUDA
-                target_providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
-                
-                # 🐒 猴子补丁：强制劫持 InferenceSession 的创建行为
-                original_session = ort.InferenceSession
-                def forced_gpu_session(path_or_bytes, sess_options=None, providers=None, **kwargs):
-                    # 无论内部库怎么传，我们强制覆盖为 GPU 优先
-                    actual_providers = [p for p in target_providers if p in available_providers]
-                    return original_session(path_or_bytes, sess_options=sess_options, providers=actual_providers, **kwargs)
-                
-                import json
-                original_load = np.load
-                original_json_load = json.load
-                
-                # 注入补丁
-                ort.InferenceSession = forced_gpu_session
-                np.load = lambda *a, **k: original_load(*a, allow_pickle=True, **k)
-                json.load = lambda f, **k: original_json_load(f, **k)
-                
-                try:
-                    logger.info(f"🚀 Initializing Kokoro with FORCED GPU Providers: {target_providers}")
-                    self._kokoro = Kokoro(self.model_path, self.voices_path)
-                finally:
-                    # 卸载补丁，恢复系统原样
-                    ort.InferenceSession = original_session
-                    np.load = original_load
-                    json.load = original_json_load
+                    # 📢 强制开启 GPU 调度
+                    import onnxruntime as ort
+                    available_providers = ort.get_available_providers()
+                    target_providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+                    
+                    original_session = ort.InferenceSession
+                    def forced_gpu_session(path_or_bytes, sess_options=None, providers=None, **kwargs):
+                        actual_providers = [p for p in target_providers if p in available_providers]
+                        return original_session(path_or_bytes, sess_options=sess_options, providers=actual_providers, **kwargs)
+                    
+                    import json
+                    original_load = np.load
+                    original_json_load = json.load
+                    
+                    # 注入补丁 (修复了 allow_pickle 重复传参的问题)
+                    def safe_np_load(*args, **kwargs):
+                        kwargs['allow_pickle'] = True
+                        return original_load(*args, **kwargs)
 
+                    ort.InferenceSession = forced_gpu_session
+                    np.load = safe_np_load
+                    json.load = lambda f, **k: original_json_load(f, **k)
+                    
+                    try:
+                        logger.info(f"🚀 Initializing Kokoro with GPU Providers: {target_providers}")
+                        self._kokoro = Kokoro(self.model_path, self.voices_path)
+                    finally:
+                        ort.InferenceSession = original_session
+                        np.load = original_load
+                        json.load = original_json_load
 
-                
-                # 检查确认最终选用的 Provider
-                actual_providers = self._kokoro.sess.get_providers()
-                logger.info(f"📊 Actual ONNX Providers: {actual_providers}")
+                    self._loaded = True
+                    logger.info(f"✅ Kokoro-ONNX v1.0 ready in {time.time() - start_time:.4f}s!")
+                    
+                    # 📢 预热
+                    try:
+                        logger.info("🔥 Warming up GPU kernels...")
+                        self.synthesize("warmup", voice="af_sarah")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Warmup failed: {e}")
 
-
-                self._loaded = True
-                elapsed = time.time() - start_time
-                logger.info(f"✅ Kokoro-ONNX v1.0 engine files loaded in {elapsed:.4f}s!")
-                
-                # 📢 预热：第一次推理通常较慢，我们在背景提前跑一次
-                try:
-                    logger.info("🔥 Warming up GPU kernels...")
-                    warmup_start = time.time()
-                    # 使用极短文本触发一次真正的推理
-                    self.synthesize("warmup", voice="af_sarah")
-                    logger.info(f"✅ Warmup completed in {time.time() - warmup_start:.4f}s")
                 except Exception as e:
-                    logger.warning(f"⚠️ Warmup failed: {e}")
-
-            except Exception as e:
-                logger.error(f"❌ Failed to load Kokoro-ONNX: {e}")
-                raise
+                    logger.error(f"❌ Failed to load Kokoro-ONNX: {e}")
+                    raise
         return self._kokoro
 
     def synthesize(self, text: str, voice: str = "af_sarah", lang: str = "en-us", 

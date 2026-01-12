@@ -82,7 +82,7 @@ def benchmark_kokoro(provider="auto"):
         return None
     
     model_path = str(ROOT_DIR / "models" / "kokoro" / "kokoro-v1.0.onnx")
-    voices_path = str(ROOT_DIR / "models" / "kokoro" / "voices.json")
+    voices_path = str(ROOT_DIR / "models" / "kokoro" / "voices-v1.0.bin")
     
     if not os.path.exists(model_path) or not os.path.exists(voices_path):
         logger.error("❌ Kokoro 模型文件缺失")

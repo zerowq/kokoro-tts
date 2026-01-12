@@ -263,7 +263,7 @@
         // 默认初始化
         textInput.value = "Hello, welcome to Kokoro TTS. This is the fastest synthesis engine on GPU.";
 
-        synthBtn.onclick = () => {
+        synthBtn.onclick = async () => {
             const text = textInput.value.trim();
             if (!text) return;
 
@@ -272,39 +272,72 @@
             const lang = selectedOption.getAttribute('data-lang');
             const speed = speedInput.value;
 
-            // 状态变更
             synthBtn.disabled = true;
             loader.style.display = 'block';
-            statusField.innerText = "🚀 引擎已启动，正在流式合成中...";
+            statusField.innerText = "🚀 正在流式合成...";
             audioSection.style.display = 'none';
 
-            // 直接构建 GET URL 实现浏览器原生流式加载
-            const queryParams = new URLSearchParams({
-                text: text,
-                voice: voice,
-                lang: lang,
-                speed: speed
-            });
-
+            const queryParams = new URLSearchParams({text, voice, lang, speed});
             const streamUrl = `/api/tts/stream?${queryParams.toString()}`;
 
-            // 关键：直接将 URL 赋值给 audio 标签，实现“边合成边播放”
-            audioPlayer.src = streamUrl;
+            // 使用 MediaSource API
+            const mediaSource = new MediaSource();
+            audioPlayer.src = URL.createObjectURL(mediaSource);
             audioSection.style.display = 'block';
 
-            audioPlayer.oncanplay = () => {
-                statusField.innerText = "✅ 正在播放音频流...";
-                synthBtn.disabled = false;
-                loader.style.display = 'none';
-                audioPlayer.play();
-            };
+            mediaSource.addEventListener('sourceopen', async () => {
+                // 注意：某些浏览器对 audio/wav 的 MSE 支持可能有限
+                // 但在这里我们尝试使用标准 PCM 流格式
+                const sourceBuffer = mediaSource.addSourceBuffer('audio/wav; codecs="1"');
+                
+                try {
+                    const response = await fetch(streamUrl);
+                    const reader = response.body.getReader();
+
+                    let firstChunk = true;
+                    while (true) {
+                        const {done, value} = await reader.read();
+                        if (done) break;
+
+                        // 等待 buffer 空闲
+                        if (sourceBuffer.updating) {
+                            await new Promise(resolve => sourceBuffer.addEventListener('updateend', resolve, {once: true}));
+                        }
+
+                        sourceBuffer.appendBuffer(value);
+
+                        if (firstChunk) {
+                            audioPlayer.play().catch(e => console.error("Auto-play blocked:", e));
+                            statusField.innerText = "✅ 正在播放...";
+                            synthBtn.disabled = false;
+                            loader.style.display = 'none';
+                            firstChunk = false;
+                        }
+                    }
+
+                    // 传输结束后关闭流
+                    if (mediaSource.readyState === 'open') {
+                        // 等待最后的 buffer 更新完成
+                        if (sourceBuffer.updating) {
+                            await new Promise(resolve => sourceBuffer.addEventListener('updateend', resolve, {once: true}));
+                        }
+                        mediaSource.endOfStream();
+                    }
+                } catch (err) {
+                    console.error("Streaming error:", err);
+                    statusField.innerText = "❌ 流传输错误";
+                    synthBtn.disabled = false;
+                    loader.style.display = 'none';
+                }
+            });
 
             audioPlayer.onerror = () => {
-                statusField.innerText = "❌ 合成出错，请检查后台日志";
+                statusField.innerText = "❌ 播放器错误";
                 synthBtn.disabled = false;
                 loader.style.display = 'none';
             };
         };
+
 
         voiceSelect.onchange = () => {
             const selectedOption = voiceSelect.options[voiceSelect.selectedIndex];

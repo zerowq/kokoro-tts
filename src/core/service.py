@@ -173,7 +173,7 @@ class TTSService:
                 chunk = chunk.strip()
                 if not chunk: continue
                 
-                if len(chunk) > 120:
+                if len(chunk) > 40:
                     sub_parts = re.split(r'([,，;；])', chunk)
                     for j in range(0, len(sub_parts)-1, 2):
                         chunks.append(sub_parts[j] + sub_parts[j+1])

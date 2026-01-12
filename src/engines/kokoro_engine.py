@@ -78,12 +78,19 @@ class KokoroEngine:
                     self._loaded = True
                     logger.info(f"✅ Kokoro-ONNX v1.0 ready in {time.time() - start_time:.4f}s!")
                     
-                    # 📢 预热
+                    # 📢 深度预热逻辑 (Deep Warmup)
+                    # 生产环境中为了保证第一位用户的体验，我们需要覆盖常见的算子维度
                     try:
-                        logger.info("🔥 Warming up GPU with complex sentence...")
-                        self.synthesize("Optimization confirmed. The system is operating at maximum efficiency on the Tesla V-100 GPU.")
+                        logger.info("🔥 Warming up GPU with complex tasks (1/3)...")
+                        self.synthesize("Warmup.") # 短文本预热
+                        logger.info("🔥 Warming up GPU with complex tasks (2/3)...")
+                        self.synthesize("Artificial intelligence is transforming the way we interact with technology.") # 中长文本预热
+                        logger.info("🔥 Warming up GPU with complex tasks (3/3)...")
+                        # 这次的推理会非常快，因为 GPU 已经就绪
+                        self.synthesize("Optimization confirmed. Deep warmup completed.")
                     except Exception as e:
-                        logger.warning(f"⚠️ Warmup failed: {e}")
+                        logger.warning(f"⚠️ Warmup partially failed: {e}")
+
 
                 except Exception as e:
                     logger.error(f"❌ Failed to load Kokoro-ONNX: {e}")

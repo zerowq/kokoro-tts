@@ -281,7 +281,7 @@
             statusField.innerText = "🚀 正在极速流式合成...";
             audioSection.style.display = 'block'; // 显示播放器
 
-            const queryParams = new URLSearchParams({ text, voice, lang, speed });
+            const queryParams = new URLSearchParams({ text, voice, lang, speed, format: 'raw' });
             const streamUrl = `/api/tts/stream?${queryParams.toString()}`;
 
             try {
@@ -297,25 +297,16 @@
                 const reader = response.body.getReader();
 
                 let firstChunk = true;
-                let isHeaderSkipped = false;
 
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
 
-                    let pcmData = value;
-
-                    // 1. 跳过 WAV 头部 (44字节)，因为 Web Audio 直接处理原始 PCM
-                    if (!isHeaderSkipped && pcmData.length >= 44) {
-                        pcmData = pcmData.slice(44);
-                        isHeaderSkipped = true;
-                    } else if (!isHeaderSkipped) {
-                        continue; // 包太小，还没到头部结束
-                    }
-
+                    const pcmData = value;
                     if (pcmData.length === 0) continue;
 
-                    // 2. 将 Int16 转为 Float32 (Web Audio 标准格式)
+                    // 将 Int16 转为 Float32 (Web Audio 标准格式)
+                    // 后端传来的已经是纯 PCM，且字节长度必为偶数
                     const int16Array = new Int16Array(pcmData.buffer, pcmData.byteOffset, pcmData.byteLength / 2);
                     const float32Array = new Float32Array(int16Array.length);
                     for (let n = 0; n < int16Array.length; n++) {

@@ -101,6 +101,7 @@ async def synthesize_stream(
     voice: Optional[str] = "af_sarah", 
     lang: Optional[str] = "en-us", 
     speed: Optional[float] = 1.0,
+    format: Optional[str] = "wav", # 新增格式参数
     request: Optional[TTSRequest] = None
 ):
     """流式合成语音 API (兼容多种传参方式)"""
@@ -111,21 +112,27 @@ async def synthesize_stream(
             voice = request.voice
             lang = request.lang
             speed = request.speed
-        
+            format = request.format # 从请求体中获取 format
+
         if not text:
             raise HTTPException(status_code=400, detail="Text is required")
 
         service = get_service()
+        # 如果 format 为 raw，则不输出头
+        yield_header = (format != "raw")
+        
         gen = service.synthesize_stream(
             text=text,
             voice=voice,
             lang=lang,
-            speed=speed
+            speed=speed,
+            yield_header=yield_header
         )
         
-        # 为了让浏览器直接播放，这里必须返回完整的二进制流 (包含 WAV 头的模拟)
-        # 注意：由于 Kokoro 目前是整段生成，我们直接将生成好的结果流式吐出
-        return StreamingResponse(gen, media_type="audio/wav")
+        # 动态设置 media_type
+        media_type = "audio/wav" if yield_header else "audio/pcm"
+        return StreamingResponse(gen, media_type=media_type)
+
     except Exception as e:
         logger.error(f"❌ API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

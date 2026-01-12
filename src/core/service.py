@@ -149,14 +149,16 @@ class TTSService:
             raise
     
     def synthesize_stream(self, text: str, voice: str = "af_sarah",
-                         lang: str = "en-us", speed: float = 1.0) -> Generator[bytes, None, None]:
+                         lang: str = "en-us", speed: float = 1.0,
+                         yield_header: bool = True) -> Generator[bytes, None, None]:
         """流式合成语音 (带异步预取流水线，实现极致响应)"""
         import re
         import time
         try:
             # 1. 自动选择引擎
             engine = self.auto_select_engine(lang)
-            logger.info(f"📡 [STREAM] Starting pipeline (Engine: {engine})...")
+            logger.info(f"📡 [STREAM] Starting pipeline (Engine: {engine}, Header: {yield_header})...")
+
 
             # 2. 增强型分段：先按句末标点切
             # 添加了对问号、叹号、省略号的全面支持
@@ -186,10 +188,12 @@ class TTSService:
             if not chunks: return
 
             # 4. 发送流式 WAV 头部
-            wav_header = struct.pack('<4sI4s4sIHHIIHH4sI',
-                b'RIFF', 0x7FFFFFFF, b'WAVE', b'fmt ', 16, 1, 1,
-                24000, 24000 * 2, 2, 16, b'data', 0x7FFFFFFF)
-            yield wav_header
+            if yield_header:
+                wav_header = struct.pack('<4sI4s4sIHHIIHH4sI',
+                    b'RIFF', 0x7FFFFFFF, b'WAVE', b'fmt ', 16, 1, 1,
+                    24000, 24000 * 2, 2, 16, b'data', 0x7FFFFFFF)
+                yield wav_header
+
 
             # 4. 发送流式数据 (回归串行，利用 GPU 极速推理实现首包秒开)
             for i, chunk in enumerate(chunks):

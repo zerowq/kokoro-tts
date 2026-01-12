@@ -58,19 +58,22 @@ class KokoroEngine:
                             logger.info(f"🚀 Initializing Kokoro on {actual_providers[0]}")
                             self._kokoro = Kokoro(self.model_path, self.voices_path)
                             
-                            # 💡 强力注入优化后的 Session
+                            # 💡 强力注入优化后的 Session (强制使用 GPU 指定的 providers)
                             self._kokoro.sess = ort.InferenceSession(
-
-                                    self.model_path, 
-                                    sess_options=sess_options, 
-                                    providers=actual_providers
-                                )
-                            finally:
-                                np.load = orig_np_load
+                                self.model_path, 
+                                sess_options=sess_options, 
+                                providers=actual_providers
+                            )
+                        finally:
+                            # 恢复原始 np.load
+                            np.load = orig_np_load
 
                     except Exception as e:
                         logger.error(f"❌ Failed to init Kokoro session: {e}")
                         raise
+                    finally:
+                        # 恢复原始 np.load
+                        np.load = orig_np_load
 
                     self._loaded = True
                     logger.info(f"✅ Kokoro-ONNX v1.0 ready in {time.time() - start_time:.4f}s!")

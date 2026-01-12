@@ -50,9 +50,18 @@ class KokoroEngine:
                     actual_providers = [p for p in target_providers if p in available_providers]
 
                     try:
-                        # 我们手动创建 Session 以便注入配置
-                        logger.info(f"🚀 Initializing Kokoro Session with: {actual_providers}")
-                        self._kokoro = Kokoro(self.model_path, self.voices_path)
+                        # 💉 核心补丁：劫持 np.load 以解决 allow_pickle 问题
+                        # 这是因为 kokoro_onnx 内部加载 voices.bin 时使用的是旧版逻辑
+                        orig_np_load = np.load
+                        np.load = lambda *a, **k: orig_np_load(*a, allow_pickle=True, **k)
+                        
+                        try:
+                            logger.info(f"🚀 Initializing Kokoro Session with: {actual_providers}")
+                            self._kokoro = Kokoro(self.model_path, self.voices_path)
+                        finally:
+                            # 恢复原始 np.load
+                            np.load = orig_np_load
+
                         
                         # 💡 强制刷新为优化后的 Session
                         self._kokoro.sess = ort.InferenceSession(

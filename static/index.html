@@ -297,23 +297,42 @@
                 const reader = response.body.getReader();
 
                 let firstChunk = true;
+                let pendingBuffer = null; // 用于存放跨包的剩余字节
 
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
 
-                    const pcmData = value;
-                    if (pcmData.length === 0) continue;
-
-                    // 将 Int16 转为 Float32 (Web Audio 标准格式)
-                    // 后端传来的已经是纯 PCM，且字节长度必为偶数
-                    const int16Array = new Int16Array(pcmData.buffer, pcmData.byteOffset, pcmData.byteLength / 2);
-                    const float32Array = new Float32Array(int16Array.length);
-                    for (let n = 0; n < int16Array.length; n++) {
-                        float32Array[n] = int16Array[n] / 32768.0;
+                    // 1. 合并之前剩余的字节
+                    let pcmBytes = value;
+                    if (pendingBuffer && pendingBuffer.length > 0) {
+                        const temp = new Uint8Array(pendingBuffer.length + pcmBytes.length);
+                        temp.set(pendingBuffer);
+                        temp.set(pcmBytes, pendingBuffer.length);
+                        pcmBytes = temp;
+                        pendingBuffer = null;
                     }
 
-                    // 3. 创建音频 Buffer 并调度播放
+                    // 2. 检查是否有奇数长度（最后一个采样点不完整）
+                    if (pcmBytes.length % 2 !== 0) {
+                        pendingBuffer = pcmBytes.slice(-1);
+                        pcmBytes = pcmBytes.slice(0, -1);
+                    }
+
+                    if (pcmBytes.length === 0) continue;
+
+                    // 3. 安全转换 Int16 到 Float32
+                    // 使用 DataView 避免 byteOffset 对齐导致的 RangeError
+                    const dataView = new DataView(pcmBytes.buffer, pcmBytes.byteOffset, pcmBytes.byteLength);
+                    const numSamples = pcmBytes.byteLength / 2;
+                    const float32Array = new Float32Array(numSamples);
+
+                    for (let n = 0; n < numSamples; n++) {
+                        // 强制小端读取 (Little Endian)
+                        float32Array[n] = dataView.getInt16(n * 2, true) / 32768.0;
+                    }
+
+                    // 4. 创建音频 Buffer 并调度播放
                     const audioBuf = audioCtx.createBuffer(1, float32Array.length, 24000);
                     audioBuf.copyToChannel(float32Array, 0);
 
@@ -321,10 +340,9 @@
                     source.buffer = audioBuf;
                     source.connect(audioCtx.destination);
 
-                    // 确保片段之间紧密衔接
                     const currentTime = audioCtx.currentTime;
                     if (nextStartTime < currentTime) {
-                        nextStartTime = currentTime + 0.05; // 稍微缓冲避免卡顿
+                        nextStartTime = currentTime + 0.02; // 降低延迟，但也给系统留一点点缓冲
                     }
 
                     source.start(nextStartTime);
@@ -337,6 +355,7 @@
                         firstChunk = false;
                     }
                 }
+
 
                 statusField.innerText = "✨ 播放完毕";
 

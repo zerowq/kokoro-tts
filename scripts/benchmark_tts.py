@@ -91,8 +91,12 @@ def benchmark_kokoro(provider="auto"):
         output_dir.mkdir(parents=True, exist_ok=True)
 
         for i, text in enumerate(TEST_TEXTS["en"]):
-            # 模拟流式分块 (TTFB 测量点)
+            # 模拟流式分块 (针对长文本)
             chunks = [c for c in re.split(r'([.!?])', text) if c.strip()]
+            
+            # --- 稳态测试开始 ---
+            # 先跑一遍，让 GPU 算子和显存分配进入稳态
+            for chunk in chunks: engine.synthesize(chunk) 
             
             total_start = time.time()
             ttfb = 0
@@ -106,6 +110,8 @@ def benchmark_kokoro(provider="auto"):
                 all_audio.append(chunk_audio)
             
             total_elapsed = time.time() - total_start
+            # --- 稳态测试结束 ---
+
             combined_audio = np.concatenate(all_audio)
             duration = len(combined_audio) / 24000
             
@@ -158,10 +164,14 @@ def benchmark_mms(device="auto"):
         output_dir = ROOT_DIR / "output" / "benchmark"
         
         for i, text in enumerate(TEST_TEXTS["ms"]):
-            # MMS 比较重，通常不按句分，但为了对比 TTFB，我们模拟单句推理
+            # 先跑一遍稳态
+            engine.synthesize(text, language="ms")
+            
+            # 真实计时
             total_start = time.time()
             audio = engine.synthesize(text, language="ms")
             elapsed = time.time() - total_start
+
             
             duration = len(audio) / 16000
             out_file = output_dir / f"mms_{i+1}.wav"

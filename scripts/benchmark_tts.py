@@ -1,424 +1,218 @@
 #!/usr/bin/env python3
 """
-Kokoro vs MMS-TTS 性能对比测试脚本
-
-测试维度:
-  • 模型加载时间
-  • 推理速度 (CPU vs GPU)
-  • GPU 显存占用
-  • 音质对比 (手动)
-
-支持:
-  • Kokoro-82M (ONNX, CPU/GPU)
-  • Meta MMS-TTS (PyTorch, CPU/GPU)
+Kokoro vs MMS-TTS 性能对比测试脚本 (增强版)
+测量指标: 
+  - RTF (Real Time Factor)
+  - TTFB (Time to First Byte/Audio)
 """
 import os
 import sys
 import time
 import gc
+import re
 import numpy as np
 import scipy.io.wavfile as wav
 from pathlib import Path
+from loguru import logger
 
 ROOT_DIR = Path(__file__).parent.parent.absolute()
 sys.path.insert(0, str(ROOT_DIR))
-
-from loguru import logger
 
 # 测试文本
 TEST_TEXTS = {
     "en": [
         "Hello, this is a short sentence for testing.",
         "The quick brown fox jumps over the lazy dog. This is a medium length sentence to evaluate the quality of speech synthesis.",
-        "Artificial intelligence is transforming the way we interact with technology. From voice assistants to autonomous vehicles, AI is becoming an integral part of our daily lives.",
+        "Artificial intelligence is transforming the way we interact with technology. From voice assistants to autonomous vehicles, AI is becoming an integral part of our daily lives."
     ],
     "ms": [
-        "Halo, ini adalah ayat pendek untuk ujian.",  # 短句
-        "Saya adalah asisten AI yang dirancang untuk membantu Anda dengan berbagai tugas. Saya dapat menjawab pertanyaan, memberikan informasi, dan membantu Anda menyelesaikan pekerjaan.",  # 中句
-        "Kecerdasan buatan sedang mengubah cara kita berinteraksi dengan teknologi. Dari asisten suara hingga kendaraan otonom, AI menjadi bagian integral dari kehidupan sehari-hari kita. Teknologi ini terus berkembang dan memberikan manfaat luar biasa bagi masyarakat.",  # 长句
+        "Halo, ini adalah ayat pendek untuk ujian.",
+        "Saya adalah asisten AI yang dirancang untuk membantu Anda dengan berbagai tugas. Saya dapat menjawab pertanyaan, memberikan informasi, dan membantu Anda menyelesaikan pekerjaan.",
+        "Kecerdasan buatan sedang mengubah cara kita berinteraksi dengan teknologi. Dari asisten suara hingga kendaraan otonom, AI menjadi bagian integral dari kehidupan sehari-hari kita."
     ]
 }
 
 def get_gpu_memory_mb():
-    """获取当前 GPU 显存使用量 (MB)"""
     try:
         import torch
         if torch.cuda.is_available():
             return torch.cuda.memory_allocated() / 1024 / 1024
-    except:
-        pass
+    except: pass
     return -1
 
 def get_peak_gpu_memory_mb():
-    """获取峰值 GPU 显存 (MB)"""
     try:
         import torch
         if torch.cuda.is_available():
             return torch.cuda.max_memory_allocated() / 1024 / 1024
-    except:
-        pass
+    except: pass
     return -1
 
 def clear_gpu_memory():
-    """清理 GPU 缓存"""
     try:
         import torch
         if torch.cuda.is_available():
-            torch.cuda.reset_peak_memory_stats()
             torch.cuda.empty_cache()
-        gc.collect()
-    except:
-        pass
+            torch.cuda.reset_peak_memory_stats()
+    except: pass
+    gc.collect()
 
 def benchmark_kokoro(provider="auto"):
-    """
-    测试 Kokoro-82M
-    
-    Args:
-        provider: ONNX 执行提供者 ("auto", "cpu", "gpu")
-    """
     try:
         from src.engines.kokoro_engine import KokoroEngine
-    except ImportError:
-        logger.error("❌ KokoroEngine 未找到")
-        return None
-    
-    model_path = str(ROOT_DIR / "models" / "kokoro" / "kokoro-v1.0.onnx")
-    voices_path = str(ROOT_DIR / "models" / "kokoro" / "voices-v1.0.bin")
-    
-    if not os.path.exists(model_path) or not os.path.exists(voices_path):
-        logger.error("❌ Kokoro 模型文件缺失")
-        return None
-    
-    # 设置 ONNX provider
-    if provider == "cpu":
-        os.environ["ONNX_PROVIDER"] = "CPUExecutionProvider"
-        model_name = "Kokoro-82M (CPU)"
-    elif provider == "gpu":
-        os.environ["ONNX_PROVIDER"] = "CUDAExecutionProvider"
-        model_name = "Kokoro-82M (GPU)"
-    else:
-        os.environ.pop("ONNX_PROVIDER", None)
-        model_name = "Kokoro-82M (Auto)"
-    
-    results = {
-        "model": model_name,
-        "load_time": 0,
-        "warmup_time": 0,
-        "synthesis_times": [],
-        "gpu_memory_mb": -1,
-        "peak_gpu_memory_mb": -1,
-    }
-    
-    try:
+        model_path = str(ROOT_DIR / "models" / "kokoro" / "kokoro-v1.0.onnx")
+        voices_path = str(ROOT_DIR / "models" / "kokoro" / "voices-v1.0.bin")
+        
         clear_gpu_memory()
         mem_before = get_gpu_memory_mb()
         
-        # 加载模型
-        logger.info(f"📥 [Kokoro] 加载模型 ({provider} mode)...")
-        start = time.time()
+        start_load = time.time()
         engine = KokoroEngine(model_path, voices_path)
         engine._load_model()
-        results["load_time"] = time.time() - start
-        logger.info(f"✅ [Kokoro] 模型加载: {results['load_time']:.2f}s")
+        load_time = time.time() - start_load
         
         mem_after = get_gpu_memory_mb()
-        if mem_before >= 0 and mem_after >= 0:
-            results["gpu_memory_mb"] = mem_after - mem_before
         
         # 预热
-        logger.info("🔥 [Kokoro] 预热...")
-        start = time.time()
-        engine.synthesize("Warmup test.", voice="af_sarah", lang="en-us")
-        results["warmup_time"] = time.time() - start
-        logger.info(f"✅ [Kokoro] 预热: {results['warmup_time']:.2f}s")
+        start_warm = time.time()
+        engine.synthesize("Warmup.")
+        warmup_time = time.time() - start_warm
         
-        # 合成测试
+        results = {
+            "model_name": f"Kokoro (Auto -> {provider.upper()})",
+            "load_time": load_time,
+            "warmup_time": warmup_time,
+            "gpu_mem_current": mem_after - mem_before if mem_before >= 0 else 0,
+            "details": [],
+            "output_files": []
+        }
+        
         output_dir = ROOT_DIR / "output" / "benchmark"
         output_dir.mkdir(parents=True, exist_ok=True)
-        
-        logger.info("⏱️  [Kokoro] 开始合成测试...")
+
         for i, text in enumerate(TEST_TEXTS["en"]):
-            # 仅统计推理核心耗时
-            start_t = time.time()
-            audio = engine.synthesize(text, voice="af_sarah", lang="en-us")
-            elapsed = time.time() - start_t
+            # 模拟流式分块 (TTFB 测量点)
+            chunks = [c for c in re.split(r'([.!?])', text) if c.strip()]
             
-            # 保存文件 (不计入耗时统计)
-            output_file = output_dir / f"kokoro_{provider}_{i+1}.wav"
-            wav.write(output_file, 24000, (audio * 32767).astype(np.int16))
-
-
+            total_start = time.time()
+            ttfb = 0
+            all_audio = []
             
-            # 计算音频时长
-            duration = len(audio) / 24000  # Kokoro 采样率固定 24k
+            for j, chunk in enumerate(chunks):
+                if not chunk.strip(): continue
+                chunk_audio = engine.synthesize(chunk)
+                if j == 0:
+                    ttfb = time.time() - total_start
+                all_audio.append(chunk_audio)
             
-            results["synthesis_times"].append({
-                "text_length": len(text),
-                "time_seconds": elapsed,
+            total_elapsed = time.time() - total_start
+            combined_audio = np.concatenate(all_audio)
+            duration = len(combined_audio) / 24000
+            
+            out_file = output_dir / f"kokoro_{i+1}.wav"
+            wav.write(out_file, 24000, (combined_audio * 32767).astype(np.int16))
+            
+            results["details"].append({
+                "char_len": len(text),
+                "elapsed": total_elapsed,
+                "ttfb": ttfb,
                 "duration": duration,
-                "output_file": output_file,
+                "rtf": total_elapsed / duration if duration > 0 else 0
             })
-
-            logger.info(f"  ✓ Text {i+1} ({len(text)} chars): {elapsed:.2f}s")
-        
-        results["peak_gpu_memory_mb"] = get_peak_gpu_memory_mb()
-        
+            results["output_files"].append(str(out_file))
+            
+        results["gpu_mem_peak"] = get_peak_gpu_memory_mb()
         return results
-        
     except Exception as e:
-        logger.error(f"❌ Kokoro 测试失败: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Kokoro Fail: {e}")
         return None
 
 def benchmark_mms(device="auto"):
-    """
-    测试 Meta MMS-TTS
-    
-    Args:
-        device: 计算设备 ("auto", "cpu", "cuda")
-    """
     try:
         from src.engines.mms_engine import MMSEngine
-    except ImportError:
-        logger.error("❌ MMSEngine 未找到")
-        return None
-    
-    models_dir = str(ROOT_DIR / "models")
-    
-    if device == "auto":
-        import torch
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        model_name = f"MMS-TTS (Auto -> {device.upper()})"
-    elif device == "cpu":
-        model_name = "MMS-TTS (CPU)"
-    elif device == "cuda":
-        model_name = "MMS-TTS (GPU)"
-    else:
-        device = "cpu"
-        model_name = "MMS-TTS (CPU)"
-    
-    results = {
-        "model": model_name,
-        "device": device,
-        "load_time": 0,
-        "warmup_time": 0,
-        "synthesis_times": [],
-        "gpu_memory_mb": -1,
-        "peak_gpu_memory_mb": -1,
-    }
-    
-    try:
+        models_dir = str(ROOT_DIR / "models")
+        
         clear_gpu_memory()
         mem_before = get_gpu_memory_mb()
         
-        # 加载模型
-        logger.info(f"📥 [MMS] 加载模型 (device={device})...")
-        start = time.time()
-        engine = MMSEngine(models_dir, device=device)
-        engine._load_model("ms")  # 预加载马来文模型
-        results["load_time"] = time.time() - start
-        logger.info(f"✅ [MMS] 模型加载: {results['load_time']:.2f}s")
+        start_load = time.time()
+        engine = MMSEngine(models_dir, device="cuda" if device=="auto" else device)
+        engine._load_model("ms")
+        load_time = time.time() - start_load
         
         mem_after = get_gpu_memory_mb()
-        if mem_before >= 0 and mem_after >= 0:
-            results["gpu_memory_mb"] = mem_after - mem_before
         
-        # 预热
-        logger.info("🔥 [MMS] 预热...")
-        start = time.time()
+        start_warm = time.time()
         engine.synthesize("Ujian", language="ms")
-        results["warmup_time"] = time.time() - start
-        logger.info(f"✅ [MMS] 预热: {results['warmup_time']:.2f}s")
+        warmup_time = time.time() - start_warm
         
-        # 合成测试 (马来文)
+        results = {
+            "model_name": f"MMS (CUDA)",
+            "load_time": load_time,
+            "warmup_time": warmup_time,
+            "gpu_mem_current": mem_after - mem_before if mem_before >= 0 else 0,
+            "details": [],
+            "output_files": []
+        }
+        
         output_dir = ROOT_DIR / "output" / "benchmark"
-        output_dir.mkdir(parents=True, exist_ok=True)
         
-        logger.info("⏱️  [MMS] 开始合成测试 (Malay/马来文)...")
         for i, text in enumerate(TEST_TEXTS["ms"]):
-            output_file = str(output_dir / f"mms_{device}_{i+1}.wav")
-            audio = engine.synthesize(text, language="ms", output_path=output_file)
-            elapsed = time.time() - start
+            # MMS 比较重，通常不按句分，但为了对比 TTFB，我们模拟单句推理
+            total_start = time.time()
+            audio = engine.synthesize(text, language="ms")
+            elapsed = time.time() - total_start
             
-            # 计算音频时长
-            sample_rate = engine.get_sample_rate("ms")
-            duration = len(audio) / sample_rate
+            duration = len(audio) / 16000
+            out_file = output_dir / f"mms_{i+1}.wav"
+            wav.write(out_file, 16000, (audio * 32767).astype(np.int16))
             
-            results["synthesis_times"].append({
-                "text_length": len(text),
-                "time_seconds": elapsed,
+            results["details"].append({
+                "char_len": len(text),
+                "elapsed": elapsed,
+                "ttfb": elapsed, # MMS 暂不分块，首音即总耗时
                 "duration": duration,
-                "output_file": output_file,
+                "rtf": elapsed / duration if duration > 0 else 0
             })
-
-            logger.info(f"  ✓ Text {i+1} ({len(text)} chars): {elapsed:.2f}s")
-        
-        results["peak_gpu_memory_mb"] = get_peak_gpu_memory_mb()
-        
+            results["output_files"].append(str(out_file))
+            
+        results["gpu_mem_peak"] = get_peak_gpu_memory_mb()
         return results
-        
     except Exception as e:
-        logger.error(f"❌ MMS 测试失败: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"MMS Fail: {e}")
         return None
 
 def print_comparison(results_list):
-    """打印对比结果"""
-    print("\n" + "=" * 80)
-    print("📊 TTS 性能对比测试结果")
-    print("=" * 80)
+    print("\n" + "=" * 90)
+    print("📊 TTS 性能对比测试结果 (含首音延迟 TTFB)")
+    print("=" * 90)
     
-    if not results_list:
-        print("❌ 没有可用的测试结果")
-        return
-    
-    # 1. 模型加载时间
-    print("\n🔄 模型加载时间 (一次性开销):")
-    for res in results_list:
-        print(f"   {res['model']:<30} {res['load_time']:.2f}s")
-    
-    # 2. 预热时间
-    print("\n🔥 模型预热时间 (首次推理):")
-    for res in results_list:
-        print(f"   {res['model']:<30} {res.get('warmup_time', 0):.2f}s")
-    
-    # 3. GPU 显存
-    print("\n💾 GPU 显存占用:")
-    for res in results_list:
-        if res['gpu_memory_mb'] >= 0:
-            print(f"   {res['model']:<30} {res['gpu_memory_mb']:.1f} MB (当前)")
-        else:
-            print(f"   {res['model']:<30} N/A (CPU 模式)")
-        
-        if res['peak_gpu_memory_mb'] >= 0:
-            print(f"   {'   (峰值)':<30} {res['peak_gpu_memory_mb']:.1f} MB")
-    
-    # 4. 合成速度对比 (详细报表)
-    print("\n⏱️  合成速度对比 (详细报表):")
-    header = f"   {'模型':<25} {'文本':<6} {'耗时(s)':<8} {'时长(s)':<8} {'速度':<8} {'RTF':<8}"
-    print(header)
-    print("   " + "-" * len(header))
-    
-    for res in results_list:
-        for item in res['synthesis_times']:
-            text_len = item['text_length']
-            time_sec = item['time_seconds']
-            duration = item['duration']
-            
-            speed = duration / time_sec if time_sec > 0 else 0
-            rtf = time_sec / duration if duration > 0 else 0
-            
-            print(f"   {res['model']:<25} {text_len:<6} {time_sec:<8.2f} {duration:<8.2f} {speed:<8.1f}x {rtf:<8.3f}")
+    print("\n🔄 模型加载 / 预热:")
+    print(f"   {'模型':<30} {'加载(s)':<10} {'预热(s)':<10}")
+    for r in results_list:
+        print(f"   {r['model_name']:<30} {r['load_time']:<10.2f} {r['warmup_time']:<10.2f}")
 
+    print("\n⏱️  合成速度对比 (详细报表):")
+    print(f"   {'模型':<25} {'字数':<6} {'总耗时(s)':<10} {'TTFB(s)':<10} {'时长(s)':<8} {'RTF':<8}")
+    print("   " + "-" * 85)
+    for r in results_list:
+        for item in r['details']:
+            print(f"   {r['model_name']:<25} {item['char_len']:<6} {item['elapsed']:<10.2f} {item['ttfb']:<10.2f} {item['duration']:<8.2f} x {item['rtf']:.3f}")
     
-    # 5. 音频文件位置
-    print("\n🎵 生成的音频文件:")
-    output_dir = ROOT_DIR / "output" / "benchmark"
-    print(f"   保存位置: {output_dir}")
-    print(f"   文件: ")
-    if output_dir.exists():
-        for wav_file in sorted(output_dir.glob("*.wav")):
-            print(f"      • {wav_file.name}")
-    
-    print("\n📝 测试完成! 请手动对比音质差异")
-    print("=" * 80)
+    print("\n💾 GPU 显存:")
+    for r in results_list:
+        print(f"   {r['model_name']:<30} {r['gpu_mem_current']:.1f} MB / 峰值 {r['gpu_mem_peak']:.1f} MB")
+    print("=" * 90 + "\n")
 
 def main():
-    """主函数"""
-    logger.remove()
-    logger.add(sys.stderr, format="<level>{message}</level>", level="INFO")
+    results = []
+    res_k = benchmark_kokoro("gpu")
+    if res_k: results.append(res_k)
     
-    import argparse
-    parser = argparse.ArgumentParser(
-        description="TTS 性能对比测试",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-示例:
-  # 默认: Kokoro Auto + MMS Auto
-  python scripts/benchmark_tts.py
-  
-  # GPU 模式对比
-  python scripts/benchmark_tts.py --kokoro gpu --mms gpu
-  
-  # 仅测试 Kokoro
-  python scripts/benchmark_tts.py --kokoro both --skip-mms
-  
-  # CPU vs GPU 对比
-  python scripts/benchmark_tts.py --kokoro both --mms gpu
-        """
-    )
+    res_m = benchmark_mms("cuda")
+    if res_m: results.append(res_m)
     
-    parser.add_argument(
-        "--kokoro",
-        choices=["auto", "cpu", "gpu", "both"],
-        default="auto",
-        help="Kokoro 测试模式"
-    )
-    parser.add_argument(
-        "--mms",
-        choices=["auto", "cpu", "gpu"],
-        default="auto",
-        help="MMS 测试模式"
-    )
-    parser.add_argument(
-        "--skip-kokoro",
-        action="store_true",
-        help="跳过 Kokoro 测试"
-    )
-    parser.add_argument(
-        "--skip-mms",
-        action="store_true",
-        help="跳过 MMS 测试"
-    )
-    
-    args = parser.parse_args()
-    
-    logger.info("=" * 80)
-    logger.info("🚀 TTS 性能对比测试")
-    logger.info("=" * 80)
-    
-    results_list = []
-    
-    # 测试 Kokoro
-    if not args.skip_kokoro:
-        if args.kokoro == "both":
-            logger.info("\n--- Kokoro-82M (CPU) ---")
-            clear_gpu_memory()
-            result = benchmark_kokoro(provider="cpu")
-            if result:
-                results_list.append(result)
-            
-            logger.info("\n--- Kokoro-82M (GPU) ---")
-            clear_gpu_memory()
-            result = benchmark_kokoro(provider="gpu")
-            if result:
-                results_list.append(result)
-        else:
-            logger.info(f"\n--- Kokoro-82M ({args.kokoro}) ---")
-            clear_gpu_memory()
-            result = benchmark_kokoro(provider=args.kokoro)
-            if result:
-                results_list.append(result)
-    
-    # 测试 MMS
-    if not args.skip_mms:
-        logger.info(f"\n--- Meta MMS-TTS ({args.mms}) ---")
-        clear_gpu_memory()
-        result = benchmark_mms(device=args.mms)
-        if result:
-            results_list.append(result)
-    
-    # 打印结果
-    print_comparison(results_list)
+    print_comparison(results)
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        logger.error(f"❌ 测试失败: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+    main()

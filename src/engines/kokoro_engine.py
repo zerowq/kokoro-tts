@@ -40,24 +40,27 @@ class KokoroEngine:
                     import onnxruntime as ort
                     start_time = time.time()
                     
-                        # 🚀 极致性能 Session 配置
-                        sess_options = ort.SessionOptions()
-                        sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-                        
-                        # 💡 关键：禁用 CPU 回退，强制 GPU
-                        actual_providers = [p for p in target_providers if p in available_providers]
+                    # 🚀 极致性能 Session 配置
+                    sess_options = ort.SessionOptions()
+                    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+                    
+                    # 💡 关键：强制 GPU 优先
+                    available_providers = ort.get_available_providers()
+                    target_providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+                    actual_providers = [p for p in target_providers if p in available_providers]
+                    
+                    try:
+                        # 💉 核心补丁：劫持 np.load
+                        orig_np_load = np.load
+                        np.load = lambda *a, **k: orig_np_load(*a, allow_pickle=True, **k)
                         
                         try:
-                            # 💉 核心补丁：劫持 np.load
-                            orig_np_load = np.load
-                            np.load = lambda *a, **k: orig_np_load(*a, allow_pickle=True, **k)
+                            logger.info(f"🚀 Initializing Kokoro on {actual_providers[0]}")
+                            self._kokoro = Kokoro(self.model_path, self.voices_path)
                             
-                            try:
-                                logger.info(f"🚀 Initializing Kokoro on {actual_providers[0]}")
-                                self._kokoro = Kokoro(self.model_path, self.voices_path)
-                                
-                                # 💡 强力注入优化后的 Session
-                                self._kokoro.sess = ort.InferenceSession(
+                            # 💡 强力注入优化后的 Session
+                            self._kokoro.sess = ort.InferenceSession(
+
                                     self.model_path, 
                                     sess_options=sess_options, 
                                     providers=actual_providers

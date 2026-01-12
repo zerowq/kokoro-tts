@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
-Kokoro vs MMS-TTS 性能对比测试脚本 (最终专业版)
+Kokoro vs MMS-TTS 性能对比测试脚本 (多梯度梯度评估版)
+梯度设计:
+ - EN-1/MS-1: ~80 字符 (短句)
+ - EN-2/MS-2: ~200 字符 (中长句)
+ - EN-3/MS-3: ~600 字符 (专业长任务)
 """
 import os
 import sys
@@ -15,7 +19,20 @@ from loguru import logger
 ROOT_DIR = Path(__file__).parent.parent.absolute()
 sys.path.insert(0, str(ROOT_DIR))
 
-# 医疗场景测试文本
+# 200 字符中等长度文本
+TEXT_200_EN = (
+    "Artificial intelligence is rapidly transforming how we interact with technology. By using "
+    "advanced GPU acceleration, we can create natural speech synthesis that is responsive and "
+    "highly effective for real-world applications."
+)
+
+TEXT_200_MS = (
+    "Kecerdasan buatan sedang mengubah cara kita berinteraksi dengan teknologi moden. Dengan "
+    "pecutan GPU, kita dapat menghasilkan sintesis pertuturan yang semula jadi serta pantas "
+    "untuk kegunaan harian kita."
+)
+
+# 医疗场景测试文本 (长任务)
 MEDICAL_TEXT = (
     "If you develop a fever, it could indicate an infection or other illness. "
     "Given your existing conditions—type 2 diabetes, hypertension, and diabetic nephropathy—fever may "
@@ -28,16 +45,16 @@ MEDICAL_TEXT = (
 
 TEST_TEXTS = {
     "en": [
-        "Warmup sentence to stabilize CUDA kernels.", 
+        "Warmup sentence to stabilize CUDA.", 
         "Kokoro TTS provides high-quality speech synthesis with optimized GPU acceleration today.",
-        "Artificial intelligence is transforming the way we interact with technology and daily life.",
+        TEXT_200_EN,
         MEDICAL_TEXT
     ],
     "ms": [
-        "Ayat pemanasan untuk menstabilkan kernel CUDA.",
+        "Ayat pemanasan CUDA.",
         "Sistem ini menyediakan sintesis pertuturan berkualiti tinggi dengan pecutan GPU hari ini.",
-        "Kecerdasan buatan sedang mengubah cara kita berinteraksi dengan teknologi dalam kehidupan.",
-        "Jika anda mengalami demam, hubungi pembekal penjagaan kesihatan anda dengan segera."
+        TEXT_200_MS,
+        "Jika anda mengalami demam, sila hubungi pembekal penjagaan kesihatan anda dengan segera untuk mendapatkan bantuan." # 增加长度以对应
     ]
 }
 
@@ -74,12 +91,10 @@ def benchmark_kokoro():
             total_start = time.time()
             ttfb = 0
             all_audio = []
-            
             for j, s in enumerate(sentences):
                 audio_chunk = engine.synthesize(s)
                 if j == 0: ttfb = time.time() - total_start
                 all_audio.append(audio_chunk)
-            
             total_elapsed = time.time() - total_start
             combined_audio = np.concatenate(all_audio)
             duration = len(combined_audio) / 24000
@@ -93,7 +108,6 @@ def benchmark_kokoro():
                     "duration": duration,
                     "rtf": total_elapsed / duration
                 })
-        
         results["mem_curr"], results["mem_peak"] = get_gpu_memory()
         return results
     except Exception as e:
@@ -138,14 +152,13 @@ def main():
     if res_m: results.append(res_m)
     
     print("\n" + "=" * 110)
-    print("🚀 Kokoro TTS 生产性能评估报告 (Tesla V100 稳态测试)")
+    print("🚀 Kokoro TTS 生产性能评估报告 (Tesla V100 多梯度稳态测试)")
     print("=" * 110)
     
     print("\n[一] 指标定义说明 (Metrics Definition):")
-    print(" - TTFB (Time To First Byte): 首音延迟。从请求开始到听到第一个单词的时间（针对用户感知最关键的指标）。")
-    print(" - Total (s): 从请求开始到最后一段音频处理完成的总物理时间。")
-    print(" - Duration (s): 生成的合成语音总时长。")
-    print(" - RTF (Real Time Factor): [Total / Duration]。RTF < 1 代表比真实语速快，数值越小效率越高。")
+    print(" - TTFB (Time To First Byte): 首音延迟。数据量越稳定，代表用户主观响应速度的一致性越好。")
+    print(" - Total (s): 总推理耗时。")
+    print(" - RTF (Real Time Factor): [Total / Duration]。数值越小代表 GPU 利用率越高。")
 
     print("\n[二] 稳态性能对比表格 (Steady-State Results):")
     header = f"   {'引擎 (Engine)':<20} {'ID':<8} {'字数':<6} {'Total(s)':<10} {'TTFB(s)':<10} {'音频时长':<8} {'RTF':<8}"
@@ -160,12 +173,10 @@ def main():
         print(f"   {r['model_name']:<20} 显存占用: {r['mem_curr']:.1f} MB | 峰值: {r['mem_peak']:.1f} MB")
 
     print("\n[四] 测试文本内容附录 (Test Content Appendix):")
-    print(" - EN-1: " + TEST_TEXTS['en'][1])
-    print(" - EN-2: " + TEST_TEXTS['en'][2])
-    print(" - EN-3: (Medical Task)\n   " + TEST_TEXTS['en'][3])
-    print("\n - MS-1: " + TEST_TEXTS['ms'][1])
-    print(" - MS-2: " + TEST_TEXTS['ms'][2])
-    print(" - MS-3: " + TEST_TEXTS['ms'][3])
+    for i in range(1, 4):
+        print(f" - EN-{i}: {TEST_TEXTS['en'][i][:100] + ('...' if len(TEST_TEXTS['en'][i]) > 100 else '')}")
+    for i in range(1, 4):
+        print(f" - MS-{i}: {TEST_TEXTS['ms'][i][:100] + ('...' if len(TEST_TEXTS['ms'][i]) > 100 else '')}")
     print("\n" + "=" * 110 + "\n")
 
 if __name__ == "__main__":

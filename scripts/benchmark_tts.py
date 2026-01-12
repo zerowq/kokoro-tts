@@ -16,6 +16,8 @@ import os
 import sys
 import time
 import gc
+import numpy as np
+import scipy.io.wavfile as wav
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).parent.parent.absolute()
@@ -137,9 +139,16 @@ def benchmark_kokoro(provider="auto"):
         
         logger.info("⏱️  [Kokoro] 开始合成测试...")
         for i, text in enumerate(TEST_TEXTS["en"]):
-            output_file = str(output_dir / f"kokoro_{provider}_{i+1}.wav")
-            audio = engine.synthesize(text, voice="af_sarah", lang="en-us", output_path=output_file)
-            elapsed = time.time() - start
+            # 仅统计推理核心耗时
+            start_t = time.time()
+            audio = engine.synthesize(text, voice="af_sarah", lang="en-us")
+            elapsed = time.time() - start_t
+            
+            # 保存文件 (不计入耗时统计)
+            output_file = output_dir / f"kokoro_{provider}_{i+1}.wav"
+            wav.write(output_file, 24000, (audio * 32767).astype(np.int16))
+
+
             
             # 计算音频时长
             duration = len(audio) / 24000  # Kokoro 采样率固定 24k

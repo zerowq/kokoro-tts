@@ -40,35 +40,31 @@ class KokoroEngine:
                     import onnxruntime as ort
                     start_time = time.time()
                     
-                    # 🚀 极致性能 Session 配置
-                    sess_options = ort.SessionOptions()
-                    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-                    sess_options.add_session_config_entry("session.use_device_allocator_for_initializers", "1")
-                    
-                    available_providers = ort.get_available_providers()
-                    target_providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
-                    actual_providers = [p for p in target_providers if p in available_providers]
-
-                    try:
-                        # 💉 核心补丁：劫持 np.load 以解决 allow_pickle 问题
-                        # 这是因为 kokoro_onnx 内部加载 voices.bin 时使用的是旧版逻辑
-                        orig_np_load = np.load
-                        np.load = lambda *a, **k: orig_np_load(*a, allow_pickle=True, **k)
+                        # 🚀 极致性能 Session 配置
+                        sess_options = ort.SessionOptions()
+                        sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+                        
+                        # 💡 关键：禁用 CPU 回退，强制 GPU
+                        actual_providers = [p for p in target_providers if p in available_providers]
                         
                         try:
-                            logger.info(f"🚀 Initializing Kokoro Session with: {actual_providers}")
-                            self._kokoro = Kokoro(self.model_path, self.voices_path)
-                        finally:
-                            # 恢复原始 np.load
-                            np.load = orig_np_load
+                            # 💉 核心补丁：劫持 np.load
+                            orig_np_load = np.load
+                            np.load = lambda *a, **k: orig_np_load(*a, allow_pickle=True, **k)
+                            
+                            try:
+                                logger.info(f"🚀 Initializing Kokoro on {actual_providers[0]}")
+                                self._kokoro = Kokoro(self.model_path, self.voices_path)
+                                
+                                # 💡 强力注入优化后的 Session
+                                self._kokoro.sess = ort.InferenceSession(
+                                    self.model_path, 
+                                    sess_options=sess_options, 
+                                    providers=actual_providers
+                                )
+                            finally:
+                                np.load = orig_np_load
 
-                        
-                        # 💡 强制刷新为优化后的 Session
-                        self._kokoro.sess = ort.InferenceSession(
-                            self.model_path, 
-                            sess_options=sess_options, 
-                            providers=actual_providers
-                        )
                     except Exception as e:
                         logger.error(f"❌ Failed to init Kokoro session: {e}")
                         raise

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Kokoro vs MMS-TTS 性能对比测试脚本 (全内容展示版)
+Kokoro vs MMS-TTS 性能对比测试脚本 (最终专业版)
 """
 import os
 import sys
@@ -41,6 +41,14 @@ TEST_TEXTS = {
     ]
 }
 
+def get_gpu_memory():
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated() / 1024 / 1024, torch.cuda.max_memory_allocated() / 1024 / 1024
+    except: pass
+    return 0.0, 0.0
+
 def clear_gpu_memory():
     try:
         import torch
@@ -61,11 +69,7 @@ def benchmark_kokoro():
         engine._load_model()
         
         results = {"model_name": "Kokoro-82M (ONNX)", "details": []}
-        output_dir = ROOT_DIR / "output" / "benchmark"
-        output_dir.mkdir(parents=True, exist_ok=True)
-
         for i, text in enumerate(TEST_TEXTS["en"]):
-            # 分句模拟流式
             sentences = [s.strip() for s in re.split(r'[.!?]', text) if s.strip()]
             total_start = time.time()
             ttfb = 0
@@ -80,15 +84,17 @@ def benchmark_kokoro():
             combined_audio = np.concatenate(all_audio)
             duration = len(combined_audio) / 24000
             
-            if i > 0: # 剔除冷启动
+            if i > 0:
                 results["details"].append({
-                    "text": text[:50] + "..." if len(text) > 50 else text,
+                    "id": f"EN-{i}",
                     "char_len": len(text),
                     "total": total_elapsed,
                     "ttfb": ttfb,
                     "duration": duration,
                     "rtf": total_elapsed / duration
                 })
+        
+        results["mem_curr"], results["mem_peak"] = get_gpu_memory()
         return results
     except Exception as e:
         logger.error(f"Kokoro Fail: {e}")
@@ -111,13 +117,14 @@ def benchmark_mms():
             
             if i > 0:
                 results["details"].append({
-                    "text": text[:50] + "..." if len(text) > 50 else text,
+                    "id": f"MS-{i}",
                     "char_len": len(text),
                     "total": elapsed,
                     "ttfb": elapsed,
                     "duration": duration,
                     "rtf": elapsed / duration
                 })
+        results["mem_curr"], results["mem_peak"] = get_gpu_memory()
         return results
     except Exception as e:
         logger.error(f"MMS Fail: {e}")
@@ -130,16 +137,36 @@ def main():
     res_m = benchmark_mms()
     if res_m: results.append(res_m)
     
-    print("\n" + "=" * 125)
-    print("🚀 Kokoro TTS 生产性能评估报告 (包含详细文本预览)")
-    print("=" * 125)
-    header = f"   {'引擎':<15} {'总耗时':<8} {'TTFB':<8} {'时长':<8} {'RTF':<8} {'内容预览'}"
+    print("\n" + "=" * 110)
+    print("🚀 Kokoro TTS 生产性能评估报告 (Tesla V100 稳态测试)")
+    print("=" * 110)
+    
+    print("\n[一] 指标定义说明 (Metrics Definition):")
+    print(" - TTFB (Time To First Byte): 首音延迟。从请求开始到听到第一个单词的时间（针对用户感知最关键的指标）。")
+    print(" - Total (s): 从请求开始到最后一段音频处理完成的总物理时间。")
+    print(" - Duration (s): 生成的合成语音总时长。")
+    print(" - RTF (Real Time Factor): [Total / Duration]。RTF < 1 代表比真实语速快，数值越小效率越高。")
+
+    print("\n[二] 稳态性能对比表格 (Steady-State Results):")
+    header = f"   {'引擎 (Engine)':<20} {'ID':<8} {'字数':<6} {'Total(s)':<10} {'TTFB(s)':<10} {'音频时长':<8} {'RTF':<8}"
     print(header)
-    print("   " + "-" * 120)
+    print("   " + "-" * 100)
     for r in results:
         for item in r['details']:
-            print(f"   {r['model_name']:<15} {item['total']:<8.2f} {item['ttfb']:<8.2f} {item['duration']:<8.2f} x {item['rtf']:.3f} {item['text']}")
-    print("=" * 125 + "\n")
+            print(f"   {r['model_name']:<20} {item['id']:<8} {item['char_len']:<6} {item['total']:<10.2f} {item['ttfb']:<10.2f} {item['duration']:<8.2f} x {item['rtf']:.3f}")
+    
+    print("\n[三] GPU 显存资源占用 (Memory Usage):")
+    for r in results:
+        print(f"   {r['model_name']:<20} 显存占用: {r['mem_curr']:.1f} MB | 峰值: {r['mem_peak']:.1f} MB")
+
+    print("\n[四] 测试文本内容附录 (Test Content Appendix):")
+    print(" - EN-1: " + TEST_TEXTS['en'][1])
+    print(" - EN-2: " + TEST_TEXTS['en'][2])
+    print(" - EN-3: (Medical Task)\n   " + TEST_TEXTS['en'][3])
+    print("\n - MS-1: " + TEST_TEXTS['ms'][1])
+    print(" - MS-2: " + TEST_TEXTS['ms'][2])
+    print(" - MS-3: " + TEST_TEXTS['ms'][3])
+    print("\n" + "=" * 110 + "\n")
 
 if __name__ == "__main__":
     main()

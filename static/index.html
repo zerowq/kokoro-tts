@@ -263,6 +263,10 @@
         // 默认初始化
         textInput.value = "Hello, welcome to Kokoro TTS. This is the fastest synthesis engine on GPU.";
 
+        // Web Audio API 上下文 (单例)
+        let audioCtx = null;
+        let nextStartTime = 0;
+
         synthBtn.onclick = async () => {
             const text = textInput.value.trim();
             if (!text) return;
@@ -270,74 +274,88 @@
             const selectedOption = voiceSelect.options[voiceSelect.selectedIndex];
             const voice = voiceSelect.value;
             const lang = selectedOption.getAttribute('data-lang');
-            const speed = speedInput.value;
+            const speed = parseFloat(speedInput.value);
 
             synthBtn.disabled = true;
             loader.style.display = 'block';
-            statusField.innerText = "🚀 正在流式合成...";
-            audioSection.style.display = 'none';
+            statusField.innerText = "🚀 正在极速流式合成...";
+            audioSection.style.display = 'block'; // 显示播放器
 
-            const queryParams = new URLSearchParams({text, voice, lang, speed});
+            const queryParams = new URLSearchParams({ text, voice, lang, speed });
             const streamUrl = `/api/tts/stream?${queryParams.toString()}`;
 
-            // 使用 MediaSource API
-            const mediaSource = new MediaSource();
-            audioPlayer.src = URL.createObjectURL(mediaSource);
-            audioSection.style.display = 'block';
-
-            mediaSource.addEventListener('sourceopen', async () => {
-                // 注意：某些浏览器对 audio/wav 的 MSE 支持可能有限
-                // 但在这里我们尝试使用标准 PCM 流格式
-                const sourceBuffer = mediaSource.addSourceBuffer('audio/wav; codecs="1"');
-                
-                try {
-                    const response = await fetch(streamUrl);
-                    const reader = response.body.getReader();
-
-                    let firstChunk = true;
-                    while (true) {
-                        const {done, value} = await reader.read();
-                        if (done) break;
-
-                        // 等待 buffer 空闲
-                        if (sourceBuffer.updating) {
-                            await new Promise(resolve => sourceBuffer.addEventListener('updateend', resolve, {once: true}));
-                        }
-
-                        sourceBuffer.appendBuffer(value);
-
-                        if (firstChunk) {
-                            audioPlayer.play().catch(e => console.error("Auto-play blocked:", e));
-                            statusField.innerText = "✅ 正在播放...";
-                            synthBtn.disabled = false;
-                            loader.style.display = 'none';
-                            firstChunk = false;
-                        }
-                    }
-
-                    // 传输结束后关闭流
-                    if (mediaSource.readyState === 'open') {
-                        // 等待最后的 buffer 更新完成
-                        if (sourceBuffer.updating) {
-                            await new Promise(resolve => sourceBuffer.addEventListener('updateend', resolve, {once: true}));
-                        }
-                        mediaSource.endOfStream();
-                    }
-                } catch (err) {
-                    console.error("Streaming error:", err);
-                    statusField.innerText = "❌ 流传输错误";
-                    synthBtn.disabled = false;
-                    loader.style.display = 'none';
+            try {
+                // 初始化 AudioContext
+                if (!audioCtx || audioCtx.state === 'closed') {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
                 }
-            });
+                if (audioCtx.state === 'suspended') await audioCtx.resume();
 
-            audioPlayer.onerror = () => {
-                statusField.innerText = "❌ 播放器错误";
+                nextStartTime = audioCtx.currentTime;
+
+                const response = await fetch(streamUrl);
+                const reader = response.body.getReader();
+
+                let firstChunk = true;
+                let isHeaderSkipped = false;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    let pcmData = value;
+
+                    // 1. 跳过 WAV 头部 (44字节)，因为 Web Audio 直接处理原始 PCM
+                    if (!isHeaderSkipped && pcmData.length >= 44) {
+                        pcmData = pcmData.slice(44);
+                        isHeaderSkipped = true;
+                    } else if (!isHeaderSkipped) {
+                        continue; // 包太小，还没到头部结束
+                    }
+
+                    if (pcmData.length === 0) continue;
+
+                    // 2. 将 Int16 转为 Float32 (Web Audio 标准格式)
+                    const int16Array = new Int16Array(pcmData.buffer, pcmData.byteOffset, pcmData.byteLength / 2);
+                    const float32Array = new Float32Array(int16Array.length);
+                    for (let n = 0; n < int16Array.length; n++) {
+                        float32Array[n] = int16Array[n] / 32768.0;
+                    }
+
+                    // 3. 创建音频 Buffer 并调度播放
+                    const audioBuf = audioCtx.createBuffer(1, float32Array.length, 24000);
+                    audioBuf.copyToChannel(float32Array, 0);
+
+                    const source = audioCtx.createBufferSource();
+                    source.buffer = audioBuf;
+                    source.connect(audioCtx.destination);
+
+                    // 确保片段之间紧密衔接
+                    const currentTime = audioCtx.currentTime;
+                    if (nextStartTime < currentTime) {
+                        nextStartTime = currentTime + 0.05; // 稍微缓冲避免卡顿
+                    }
+
+                    source.start(nextStartTime);
+                    nextStartTime += audioBuf.duration;
+
+                    if (firstChunk) {
+                        statusField.innerText = "✅ 正在实时播放...";
+                        synthBtn.disabled = false;
+                        loader.style.display = 'none';
+                        firstChunk = false;
+                    }
+                }
+
+                statusField.innerText = "✨ 播放完毕";
+
+            } catch (err) {
+                console.error("Streaming error:", err);
+                statusField.innerText = "❌ 播放出错: " + err.message;
                 synthBtn.disabled = false;
                 loader.style.display = 'none';
-            };
+            }
         };
-
 
         voiceSelect.onchange = () => {
             const selectedOption = voiceSelect.options[voiceSelect.selectedIndex];
